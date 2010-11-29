@@ -1,3 +1,8 @@
+2010/11/29:
+ * Implemented early emission of structured constants, so functions
+ with such constants can still be inlined
+ * Passed testsuite with same results as trunk
+
 2010/11/29: created branch from trunk r10868
 
 
