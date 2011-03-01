@@ -1,3 +1,6 @@
+2010/03/01:
+ * Implemented flattening of nested structures in Translmod.transl_store_structure
+
 2010/11/29:
  * Implemented early emission of structured constants, so functions
  with such constants can still be inlined
