@@ -1,0 +1,78 @@
+# The standard compiler
+OCAMLOPT1=ocamlopt
+
+# The modified compiler
+OCAMLOPT2=ocamlopt
+
+#OPTIM=-O 2
+
+all: $(FILE)1.bin $(FILE)2.bin
+
+$(FILE)1.bin: $(FILE).ml
+	$(OCAMLOPT1) -dstartup -S $(OFLAGS) -inline 100 $(LIBS) -o $(FILE)1.bin $(FILE).ml
+	mv $(FILE).s $(FILE)1.s
+
+$(FILE)2.bin: $(FILE).ml
+	$(OCAMLOPT2) -dstartup -S $(OFLAGS) $(OPTIM) -inline 100 $(LIBS) -o $(FILE)2.bin $(FILE).ml
+	mv $(FILE).s $(FILE)2.s
+
+temps: $(FILE).ml
+	$(OCAMLOPT2) $(OPTIM) $(OFLAGS) -inline 100 $(LIBS) -drawlambda -c $(FILE).ml 2> $(FILE)2.lambda
+	$(OCAMLOPT2) $(OPTIM) $(OFLAGS) -inline 100 $(LIBS) -dclosure -c $(FILE).ml 2> $(FILE)2.closure
+	$(OCAMLOPT2) $(OPTIM) $(OFLAGS) -inline 100 $(LIBS) -dcmm -c $(FILE).ml 2> $(FILE)2.cmm
+	$(OCAMLOPT2) $(OPTIM) $(OFLAGS) -inline 100 $(LIBS) -dlinear -c $(FILE).ml 2> $(FILE)2.linear
+	$(OCAMLOPT2) -S $(OPTIM) $(OFLAGS) -inline 100 $(LIBS) -c $(FILE).ml
+	mv $(FILE).s $(FILE)2.S
+	$(OCAMLOPT1) $(OFLAGS) -inline 100 $(LIBS) -drawlambda -c $(FILE).ml 2> $(FILE)1.lambda
+	$(OCAMLOPT1) $(OFLAGS) -inline 100 $(LIBS) -dclosure -c $(FILE).ml 2> $(FILE)1.closure
+	 $(OCAMLOPT1) $(OFLAGS) -inline 100 $(LIBS) -dcmm -c $(FILE).ml 2> $(FILE)1.cmm
+	 $(OCAMLOPT1) $(OFLAGS) -inline 100 $(LIBS) -dlinear -c $(FILE).ml 2> $(FILE)1.linear
+	 $(OCAMLOPT1) -S $(OFLAGS) -inline 100 $(LIBS) -c $(FILE).ml
+	mv $(FILE).s $(FILE)1.S
+
+clean:
+	rm -f *.bin *.cm? *.o *.s *.log *~ *.data.* *.S core *.linear *.closure *.cmm *.lambda
+
+distclean: clean
+	   rm -f *.[0-9]*
+
+test:
+	for i in $(TESTS); do \
+		echo $$i; \
+		echo "time ./$(FILE)1.bin $$i < $(INPUT) > $(FILE)1.data.$$i"; \
+		time ./$(FILE)1.bin $$i < $(INPUT) > $(FILE)1.data.$$i; \
+		echo "time ./$(FILE)2.bin $$i < $(INPUT) > $(FILE)2.data.$$i"; \
+		time ./$(FILE)2.bin $$i < $(INPUT) > $(FILE)2.data.$$i; \
+		cmp $(FILE)1.data.$$i $(FILE)2.data.$$i; \
+	done
+
+test-null:
+	for i in $(TESTS); do \
+		echo $$i; \
+		echo "time ./$(FILE)1.bin $$i < $(INPUT) > /dev/null"; \
+		time ./$(FILE)1.bin $$i < $(INPUT) > /dev/null; \
+		echo "time ./$(FILE)2.bin $$i < $(INPUT) > /dev/null"; \
+		time ./$(FILE)2.bin $$i < $(INPUT) > /dev/null; \
+	done
+
+test2-null:
+	for i in $(TESTS); do \
+		echo $$i; \
+		echo "time ./$(FILE)2.bin $$i < $(INPUT) > /dev/null"; \
+		time ./$(FILE)2.bin $$i < $(INPUT) > /dev/null; \
+	done
+
+test2: $(FILE)2.bin
+	for i in $(TESTS); do \
+		echo $$i; \
+		echo "time ./$(FILE)2.bin $$i < $(INPUT) > $(FILE)2.data.$$i"; \
+		time ./$(FILE)2.bin $$i < $(INPUT) > $(FILE)2.data.$$i; \
+		cmp $(FILE)1.data.$$i $(FILE)2.data.$$i; \
+	done
+
+test1: $(FILE)1.bin
+	for i in $(TESTS); do \
+		echo $$i; \
+		echo "time ./$(FILE)1.bin $$i < $(INPUT) > $(FILE)1.data.$$i"; \
+		time ./$(FILE)1.bin $$i < $(INPUT) > $(FILE)1.data.$$i; \
+	done
