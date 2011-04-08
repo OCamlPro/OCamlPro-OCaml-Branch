@@ -1,0 +1,99 @@
+OCAMLDIR=../../ocaml-3.12.0
+OCAMLOPT=$(OCAMLDIR)/boot/ocamlrun $(OCAMLDIR)/ocamlopt -I $(OCAMLDIR)/stdlib -O 6
+
+all: new_version old_version
+
+OPTS=approx-var   late-box   rec-loop   elim-ref   approx-closure \
+   linear-drop   linear-merge   raise-lets   seq-bool   inline-rec \
+   inline-tuplified   remove-try   inline-const
+
+
+m2-O0: code.ml Makefile
+	$(OCAMLOPT) -inline 50 $(OFLAGS) -S -O 0 -o m2-O0 code.ml
+	mv code.s code.m2-O0
+
+m2-O1: code.ml Makefile
+	$(OCAMLOPT) -inline 50 $(OFLAGS) -S -O 1 -o m2-O1 code.ml
+	mv code.s code.m2-O1
+
+m2-O3: code.ml Makefile
+	$(OCAMLOPT) -inline 50 $(OFLAGS) -S -O 3 -o m2-O3 code.ml
+	mv code.s code.m2-O3
+
+m2: code.ml Makefile ../Makefile.included
+	$(MAKE) new_version
+	$(OCAMLOPT) -o m2 code.cmx
+	time ./m2 > /dev/null
+
+m1:  code.ml Makefile ../Makefile.included
+	$(MAKE) old_version
+	ocamlopt -o m1 code.cmx
+	time ./m1 > /dev/null
+
+times: m1 m2-O0 m2-O1 m2-O3
+	@echo m2-O3
+	time ./m2-O3 > /dev/null
+	@echo m1
+	time ./m1 > /dev/null
+	@echo m2-O1
+	time ./m2-O1 > /dev/null
+	@echo m2-O0
+	time ./m2-O0 > /dev/null
+
+opts:
+	for opt in $(OPTS); do \
+		echo -- -O 1 -Ono $$opt; \
+		$(OCAMLOPT) -inline 50 $(OFLAGS) -O 1 -Ono $$opt -o m2 code.ml; \
+		time ./m2 > /dev/null; \
+	done
+
+new_version:
+	cp code.ml code_new.ml
+	echo '(*' >> code_new.ml
+	echo '-drawlambda' >> code_new.ml
+	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -drawlambda -c code.ml 2> code.rawlambda
+	cat code.rawlambda >> code_new.ml
+	echo '-dlambda' >> code_new.ml
+	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dlambda -c code.ml 2> code.lambda
+	cat code.lambda >> code_new.ml
+	echo '-dlambda2' >> code_new.ml
+	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dlambda2 -c code.ml 2> code.lambda2
+	cat code.lambda2 >> code_new.ml
+	echo '-dclosure' >> code_new.ml
+	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dclosure -c code.ml 2> code.closure
+	cat code.closure >> code_new.ml
+	echo '-dclosure2' >> code_new.ml
+	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dstats -dclosure2 -c code.ml 2> code.closure2
+	cat code.closure2 >> code_new.ml
+	echo >> code_new.ml
+	echo '-dcmm' >> code_new.ml
+	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dcmm -c code.ml 2> code.cmm
+	cat code.cmm >> code_new.ml
+	echo '-dlinear' >> code_new.ml
+	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dlinear -S -c code.ml 2> code.linear
+	cat code.linear >> code_new.ml
+	mv code.s code.S
+	echo '-S' >> code_new.ml
+	cat code.S >> code_new.ml
+	echo '*)' >> code_new.ml
+
+old_version:
+	cp code.ml code_old.ml
+	echo '(*' >> code_old.ml
+	echo '-drawlambda' >> code_old.ml
+	ocamlopt -inline 100 $(OFLAGS) -drawlambda -c code.ml 2> code.rawlambda.old
+	cat code.rawlambda.old >> code_old.ml
+	echo '-dlambda' >> code_old.ml
+	ocamlopt -inline 100 $(OFLAGS) -dlambda -c code.ml 2> code.lambda.old
+	cat code.lambda.old >> code_old.ml
+	echo >> code_old.ml
+	echo '-dcmm' >> code_old.ml
+	ocamlopt -inline 100 $(OFLAGS) -dcmm -S -c code.ml 2> code.cmm.old
+	cat code.cmm.old >> code_old.ml
+	echo '-dlinear' >> code_old.ml
+	ocamlopt -inline 100 $(OFLAGS) -dlinear -S -c code.ml 2> code.linear.old
+	mv code.s code.S.old
+	cat code.linear.old >> code_old.ml
+	echo '-S' >> code_old.ml
+	cat code.S.old >> code_old.ml
+	echo '*)' >> code_old.ml

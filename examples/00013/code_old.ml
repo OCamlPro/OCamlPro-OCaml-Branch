@@ -1,0 +1,224 @@
+(* This example will generate a stack overflow if the first 'f' is
+   called, and a core dump if the second 'f' is called. As the assembly
+   code shows, there are no tests performed at runtime, stack overflow is
+   detected by catching the SEGV signal, and checking if the current PC
+   is in OCaml assembly code (i.e. within caml_code_area_start and
+   caml_code_area_stop (TODO: what about dynamically loaded code ?)).
+
+   The best way to perform complete stack overflow detection would be to
+   add a flag to "external" to check if enough space is available on the
+   stack before the call to C code (and raise stack overflow if
+   not).
+
+   It could also be useful to put some C segments which are known to be
+   "safe" in the same area as OCaml code.
+
+  Note that it would be quite tedious to fix the behavior here, as a
+  stack overflow happening within the memory allocator could lead to
+  memory corruption if an exception is raised without fixing the
+  current state. A solution would be to have a check of stack
+  everytime allocation is performed.
+
+   Are there recursive C functions in the runtime, especially in the
+   garbage collector ?
+
+*)
+
+
+let rec f x =
+  1 + f (x+1)
+
+let rec f x =
+  let s = String.create 10 in
+  1 + f (x+1)
+
+let _ =
+  f 0
+
+(*
+-drawlambda
+File "code.ml", line 32, characters 6-7:
+Warning Y: unused variable s.
+(seq
+  (letrec (f/58 (function x/59 (+ 1 (apply f/58 (+ x/59 1)))))
+    (setfield_imm 1 (global Code!) f/58))
+  (letrec
+    (f/60
+       (function x/61
+         (let (s/62 (caml_create_string 10)) (+ 1 (apply f/60 (+ x/61 1))))))
+    (setfield_imm 0 (global Code!) f/60))
+  (apply (field 0 (global Code!)) 0) 0a)
+-dlambda
+File "code.ml", line 32, characters 6-7:
+Warning Y: unused variable s.
+(seq
+  (letrec (f/58 (function x/59 (+ 1 (apply f/58 (+ x/59 1)))))
+    (setfield_imm 1 (global Code!) f/58))
+  (letrec
+    (f/60
+       (function x/61
+         (let (s/62 (caml_create_string 10)) (+ 1 (apply f/60 (+ x/61 1))))))
+    (setfield_imm 0 (global Code!) f/60))
+  (apply (field 0 (global Code!)) 0) 0a)
+
+-dcmm
+File "code.ml", line 32, characters 6-7:
+Warning Y: unused variable s.
+(data int 2048 global "camlCode" "camlCode": skip 8)
+(data int 2295 "camlCode__1": addr "camlCode__f_60" int 3)
+(data int 2295 "camlCode__2": addr "camlCode__f_58" int 3)
+(function camlCode__f_58 (x/59: addr)
+ (+ (app "camlCode__f_58" (+ x/59 2) addr) 2))
+
+(function camlCode__f_60 (x/61: addr)
+ (let s/62 (extcall "caml_create_string" 21 addr)
+   (+ (app "camlCode__f_60" (+ x/61 2) addr) 2)))
+
+(function camlCode__entry ()
+ (let clos/65 "camlCode__2" (store (+a "camlCode" 4) clos/65))
+ (let clos/67 "camlCode__1" (store "camlCode" clos/67))
+ (app "camlCode__f_60" 1 unit) 1a)
+
+(data)
+-dlinear
+File "code.ml", line 32, characters 6-7:
+Warning Y: unused variable s.
+*** Linearized code
+camlCode__f_58:
+  I/9[%eax] := I/9[%eax] + 2
+  {}
+  R/0[%eax] := call "camlCode__f_58" R/0[%eax]
+  I/11[%eax] := I/11[%eax] + 2
+  reload retaddr
+  return R/0[%eax]
+  
+*** Linearized code
+camlCode__f_60:
+  spilled-x/13[s0] := x/8[%eax] (spill)
+  push 21
+  {spilled-x/13[s0]*}
+  R/0[%eax] := extcall "caml_create_string"  (noalloc)
+  offset stack -4
+  x/14[%eax] := spilled-x/13[s0] (reload)
+  I/10[%eax] := I/10[%eax] + 2
+  {}
+  R/0[%eax] := call "camlCode__f_60" R/0[%eax]
+  I/12[%eax] := I/12[%eax] + 2
+  reload retaddr
+  return R/0[%eax]
+  
+*** Linearized code
+camlCode__entry:
+  clos/8[%eax] := "camlCode__2"
+  ["camlCode" + 4] := clos/8[%eax]
+  clos/9[%eax] := "camlCode__1"
+  ["camlCode"] := clos/9[%eax]
+  I/10[%eax] := 1
+  {}
+  call "camlCode__f_60" R/0[%eax]
+  A/11[%eax] := 1
+  reload retaddr
+  return R/0[%eax]
+  
+-S
+	.data
+	.globl	camlCode__data_begin
+camlCode__data_begin:
+	.text
+	.globl	camlCode__code_begin
+camlCode__code_begin:
+	.data
+	.long	2048
+	.globl	camlCode
+camlCode:
+	.space	8
+	.data
+	.long	2295
+camlCode__1:
+	.long	camlCode__f_60
+	.long	3
+	.data
+	.long	2295
+camlCode__2:
+	.long	camlCode__f_58
+	.long	3
+	.text
+	.align	16
+	.globl	camlCode__f_58
+camlCode__f_58:
+.L100:
+	addl	$2, %eax
+	call	camlCode__f_58
+.L101:
+	addl	$2, %eax
+	ret
+	.type	camlCode__f_58,@function
+	.size	camlCode__f_58,.-camlCode__f_58
+	.text
+	.align	16
+	.globl	camlCode__f_60
+camlCode__f_60:
+	subl	$4, %esp
+.L102:
+	movl	%eax, 0(%esp)
+	pushl	$21
+	movl	$caml_create_string, %eax
+	call	caml_c_call
+.L103:
+	addl	$4, %esp
+	movl	0(%esp), %eax
+	addl	$2, %eax
+	call	camlCode__f_60
+.L104:
+	addl	$2, %eax
+	addl	$4, %esp
+	ret
+	.type	camlCode__f_60,@function
+	.size	camlCode__f_60,.-camlCode__f_60
+	.text
+	.align	16
+	.globl	camlCode__entry
+camlCode__entry:
+.L105:
+	movl	$camlCode__2, %eax
+	movl	%eax, camlCode + 4
+	movl	$camlCode__1, %eax
+	movl	%eax, camlCode
+	movl	$1, %eax
+	call	camlCode__f_60
+.L106:
+	movl	$1, %eax
+	ret
+	.type	camlCode__entry,@function
+	.size	camlCode__entry,.-camlCode__entry
+	.data
+	.text
+	.globl	camlCode__code_end
+camlCode__code_end:
+	.data
+	.globl	camlCode__data_end
+camlCode__data_end:
+	.long	0
+	.globl	camlCode__frametable
+camlCode__frametable:
+	.long	4
+	.long	.L106
+	.word	4
+	.word	0
+	.align	4
+	.long	.L104
+	.word	8
+	.word	0
+	.align	4
+	.long	.L103
+	.word	12
+	.word	1
+	.word	4
+	.align	4
+	.long	.L101
+	.word	4
+	.word	0
+	.align	4
+
+	.section .note.GNU-stack,"",%progbits
+*)
