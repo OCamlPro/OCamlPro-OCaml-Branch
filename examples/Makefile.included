@@ -1,51 +1,51 @@
-OCAMLDIR=../../ocaml-3.12.0
+OCAMLDIR=../../inline-more
 OCAMLOPT=$(OCAMLDIR)/boot/ocamlrun $(OCAMLDIR)/ocamlopt -I $(OCAMLDIR)/stdlib -O 6
+
+O0= -O 0
+O1= -O 1
+O2= -O 2
+O3= -O 3
 
 all: new_version old_version
 
-OPTS=approx-var   late-box   rec-loop   elim-ref   approx-closure \
-   linear-drop   linear-merge   raise-lets   seq-bool   inline-rec \
-   inline-tuplified   remove-try   inline-const
+m2-O0.bin: code.ml Makefile
+	$(OCAMLOPT) -inline 50 $(OFLAGS) -S $(O0) -o m2-O0.bin code.ml
+	mv code.s code.m2-O0.s
 
+m2-O1.bin: code.ml Makefile
+	$(OCAMLOPT) -inline 50 $(OFLAGS) -S $(O1) -o m2-O1.bin code.ml
+	mv code.s code.m2-O1.s
 
-m2-O0: code.ml Makefile
-	$(OCAMLOPT) -inline 50 $(OFLAGS) -S -O 0 -o m2-O0 code.ml
-	mv code.s code.m2-O0
+m2-O3.bin: code.ml Makefile
+	$(OCAMLOPT) -inline 50 $(OFLAGS) -S $(O3) -o m2-O3.bin code.ml
+	mv code.s code.m2-O3.s
 
-m2-O1: code.ml Makefile
-	$(OCAMLOPT) -inline 50 $(OFLAGS) -S -O 1 -o m2-O1 code.ml
-	mv code.s code.m2-O1
-
-m2-O3: code.ml Makefile
-	$(OCAMLOPT) -inline 50 $(OFLAGS) -S -O 3 -o m2-O3 code.ml
-	mv code.s code.m2-O3
-
-m2: code.ml Makefile ../Makefile.included
+m2.bin: code.ml Makefile ../Makefile.included
 	$(MAKE) new_version
-	$(OCAMLOPT) -o m2 code.cmx
-	time ./m2 > /dev/null
+	$(OCAMLOPT) -o m2.bin code.cmx
+	time ./m2.bin > /dev/null
 
-m1:  code.ml Makefile ../Makefile.included
+m1.bin:  code.ml Makefile ../Makefile.included
 	$(MAKE) old_version
-	ocamlopt -o m1 code.cmx
-	time ./m1 > /dev/null
+	ocamlopt -o m1.bin code.cmx
+	time ./m1.bin > /dev/null
 
-times: m1 m2-O0 m2-O1 m2-O3
-	@echo m2-O3
-	time ./m2-O3 > /dev/null
-	@echo m1
-	time ./m1 > /dev/null
-	@echo m2-O1
-	time ./m2-O1 > /dev/null
-	@echo m2-O0
-	time ./m2-O0 > /dev/null
+times: m1.bin m2-O0.bin m2-O1.bin m2-O3.bin
+	@echo m2-O3.bin
+	time ./m2-O3.bin > /dev/null
+	@echo m1.bin
+	time ./m1.bin > /dev/null
+	@echo m2-O1.bin
+	time ./m2-O1.bin > /dev/null
+	@echo m2-O0.bin
+	time ./m2-O0.bin > /dev/null
 
-opts:
-	for opt in $(OPTS); do \
-		echo -- -O 1 -Ono $$opt; \
-		$(OCAMLOPT) -inline 50 $(OFLAGS) -O 1 -Ono $$opt -o m2 code.ml; \
-		time ./m2 > /dev/null; \
-	done
+#opts:
+#	for opt in $(OPTS); do \
+#		echo -- -O 1 -Ono $$opt; \
+#		$(OCAMLOPT) -inline 50 $(OFLAGS) -O 1 -Ono $$opt -o m2 code.ml; \
+#		time ./m2 > /dev/null; \
+#	done
 
 new_version:
 	cp code.ml code_new.ml
@@ -99,4 +99,4 @@ old_version:
 	echo '*)' >> code_old.ml
 
 clean:
-	rm -f *.cm? *.o *.s *.closure *.rawlambda *.lambda *.S *.old *.linear *.closure2 *.lambda2 *.stats core
+	rm -f *.cm? *.o *.s *.closure *.rawlambda *.lambda *.S *.old *.linear *.closure2 *.lambda2 *.stats core *.bin
