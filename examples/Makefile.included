@@ -1,33 +1,35 @@
 OCAMLDIR=../../inline-more
-OCAMLOPT=$(OCAMLDIR)/boot/ocamlrun $(OCAMLDIR)/ocamlopt -I $(OCAMLDIR)/stdlib -O 6
 
-O0= -O 0
-O1= -O 1
-O2= -O 2
-O3= -O 3
+#O0= -O 0
+#O1= -O 1
+#O2= -O 2
+#O3= -O 3
+#O6= -O 6
+
+OCAMLOPT=$(OCAMLDIR)/boot/ocamlrun $(OCAMLDIR)/ocamlopt -I $(OCAMLDIR)/stdlib $(O6)
 
 all: new_version old_version
 
 m2-O0.bin: code.ml Makefile
-	$(OCAMLOPT) -inline 50 $(OFLAGS) -S $(O0) -o m2-O0.bin code.ml
+	$(OCAMLOPT) -inline 50 $(OFLAGS) -S $(O0) $(LIBS) -o m2-O0.bin code.ml
 	mv code.s code.m2-O0.s
 
 m2-O1.bin: code.ml Makefile
-	$(OCAMLOPT) -inline 50 $(OFLAGS) -S $(O1) -o m2-O1.bin code.ml
+	$(OCAMLOPT) -inline 50 $(OFLAGS) -S $(O1)  $(LIBS) -o m2-O1.bin code.ml
 	mv code.s code.m2-O1.s
 
 m2-O3.bin: code.ml Makefile
-	$(OCAMLOPT) -inline 50 $(OFLAGS) -S $(O3) -o m2-O3.bin code.ml
+	$(OCAMLOPT) -inline 50 $(OFLAGS) -S $(O3) $(LIBS) -o m2-O3.bin code.ml
 	mv code.s code.m2-O3.s
 
 m2.bin: code.ml Makefile ../Makefile.included
 	$(MAKE) new_version
-	$(OCAMLOPT) -o m2.bin code.cmx
+	$(OCAMLOPT) $(LIBS) -o m2.bin code.cmx
 	time ./m2.bin > /dev/null
 
 m1.bin:  code.ml Makefile ../Makefile.included
 	$(MAKE) old_version
-	ocamlopt -o m1.bin code.cmx
+	ocamlopt $(LIBS) -o m1.bin code.cmx
 	time ./m1.bin > /dev/null
 
 times: m1.bin m2-O0.bin m2-O1.bin m2-O3.bin
@@ -56,15 +58,15 @@ new_version:
 	echo '-dlambda' >> code_new.ml
 	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dlambda -c code.ml 2> code.lambda
 	cat code.lambda >> code_new.ml
-	echo '-dlambda2' >> code_new.ml
-	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dlambda2 -c code.ml 2> code.lambda2
-	cat code.lambda2 >> code_new.ml
-	echo '-dclosure' >> code_new.ml
-	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dclosure -c code.ml 2> code.closure
-	cat code.closure >> code_new.ml
-	echo '-dclosure2' >> code_new.ml
-	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dstats -dclosure2 -c code.ml 2> code.closure2
-	cat code.closure2 >> code_new.ml
+#	echo '-dlambda2' >> code_new.ml
+#	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dlambda2 -c code.ml 2> code.lambda2
+#	cat code.lambda2 >> code_new.ml
+#	echo '-dclosure' >> code_new.ml
+#	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dclosure -c code.ml 2> code.closure
+#	cat code.closure >> code_new.ml
+#	echo '-dclosure2' >> code_new.ml
+#	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dstats -dclosure2 -c code.ml 2> code.closure2
+#	cat code.closure2 >> code_new.ml
 	echo >> code_new.ml
 	echo '-dcmm' >> code_new.ml
 	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dcmm -c code.ml 2> code.cmm
@@ -72,6 +74,10 @@ new_version:
 	echo '-dlinear' >> code_new.ml
 	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dlinear -S -c code.ml 2> code.linear
 	cat code.linear >> code_new.ml
+	echo '-dstartup' >> code_new.ml
+	$(OCAMLOPT) $(OFLAGS) $(OPTIM) -dstartup -dcmm $(LIBS) -o code code.cmx 2> code.startup.cmm
+	rm -f code
+	cat code.startup.s >> code_new.ml
 	mv code.s code.S
 	echo '-S' >> code_new.ml
 	cat code.S >> code_new.ml
@@ -99,4 +105,5 @@ old_version:
 	echo '*)' >> code_old.ml
 
 clean:
-	rm -f *.cm? *.o *.s *.closure *.rawlambda *.lambda *.S *.old *.linear *.closure2 *.lambda2 *.stats core *.bin
+	rm -f *.cm? *.o *.s *.closure *.rawlambda *.lambda *.S *.old *.linear *.closure2 *.lambda2 *.stats core *.bin *~
+
