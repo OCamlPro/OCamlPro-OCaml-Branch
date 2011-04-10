@@ -61,9 +61,9 @@ new_version:
 #	echo '-dlambda2' >> code_new.ml
 #	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dlambda2 -c code.ml 2> code.lambda2
 #	cat code.lambda2 >> code_new.ml
-#	echo '-dclosure' >> code_new.ml
-#	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dclosure -c code.ml 2> code.closure
-#	cat code.closure >> code_new.ml
+	echo '-dclosure' >> code_new.ml
+	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dclosure -c code.ml 2> code.closure
+	cat code.closure >> code_new.ml
 #	echo '-dclosure2' >> code_new.ml
 #	$(OCAMLOPT) -inline 100 $(OFLAGS) $(OPTIM) -dstats -dclosure2 -c code.ml 2> code.closure2
 #	cat code.closure2 >> code_new.ml

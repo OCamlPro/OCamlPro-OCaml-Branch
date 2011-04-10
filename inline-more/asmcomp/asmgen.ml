@@ -103,7 +103,10 @@ let compile_implementation ?toplevel prefixname ppf (size, lam) =
   begin try
     Emitaux.output_channel := oc;
     Emit.begin_assembly();
-    Closure.intro size lam
+    let ulam = Closure.intro size lam in
+    Printclambda.print_ulambda_if ppf !dump_closure "After closure conversion"
+      ulam;
+    ulam
     ++ Cmmgen.compunit size
     ++ List.iter (compile_phrase ppf) ++ (fun () -> ());
     (match toplevel with None -> () | Some f -> compile_genfuns ppf f);

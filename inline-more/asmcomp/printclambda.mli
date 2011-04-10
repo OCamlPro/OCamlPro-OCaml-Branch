@@ -10,12 +10,17 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
+(***********************************************************************)
+(*                                                                     *)
+(*                    Contributed by OCamlPro                          *)
+(*                                                                     *)
+(***********************************************************************)
 
-open Lambda
+(* $Id: clambda.mli 7812 2007-01-29 12:11:18Z xleroy $ *)
 
-open Format
+open Clambda
 
-val structured_constant: formatter -> structured_constant -> unit
-val lambda: formatter -> lambda -> unit
-val primitive :  Format.formatter -> Lambda.primitive -> unit
+val print_ulambda_if : Format.formatter -> bool -> string -> ulambda -> unit
+val print_ulambda : Format.formatter -> ulambda -> unit
+
+

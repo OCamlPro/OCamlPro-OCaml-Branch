@@ -495,6 +495,9 @@ let rec close fenv cenv = function
       end
   | Lfunction(kind, params, body) as funct ->
       close_one_function fenv cenv (Ident.create "fun") funct
+
+(* we want to convert [f a] in [let a' = a in fun b c -> f a b c] when
+   fun_arity > nargs *)
   | Lapply(funct, args, loc) ->
       let nargs = List.length args in
       begin match (close fenv cenv funct, close_list fenv cenv args) with
@@ -507,6 +510,30 @@ let rec close fenv cenv = function
         when nargs = fundesc.fun_arity ->
           let app = direct_apply fundesc funct ufunct uargs in
           (app, strengthen_approx app approx_res)
+
+      | ((ufunct, Value_closure(fundesc, approx_res)), uargs)
+          when nargs < fundesc.fun_arity ->
+
+	let first_args = List.map (fun arg ->
+	  (Ident.create "arg", arg) ) args in
+	let final_args = Array.to_list (Array.init (fundesc.fun_arity - nargs) (fun _ ->
+	  Ident.create "arg")) in
+	let rec iter args body =
+	  match args with
+	      [] -> body
+	    | (arg1, arg2) :: args ->
+	      iter args
+		(Llet ( Strict, arg1, arg2, body))
+	in
+	let new_fun = iter first_args
+	  (Lfunction(
+	    Curried, final_args,
+	    Lapply(funct, (List.map (fun (arg1, arg2) ->
+	      Lvar arg1) first_args) @ (List.map (fun arg ->
+		Lvar arg ) final_args), loc)))
+	in
+	close fenv cenv new_fun
+
       | ((ufunct, Value_closure(fundesc, approx_res)), uargs)
         when fundesc.fun_arity > 0 && nargs > fundesc.fun_arity ->
           let (first_args, rem_args) = split_list fundesc.fun_arity uargs in
