@@ -4,3 +4,5 @@
 *.so
 *.cmxa
 *~
+*.orig
+*.rej
