@@ -28,7 +28,7 @@ type ulambda =
   | Uclosure of (function_label * int * Ident.t list * ulambda) list
               * ulambda list
   | Uoffset of ulambda * int
-  | Ulet of Ident.t * ulambda * ulambda
+  | Ulet of Ident.t * ulambda * value_approximation * ulambda
   | Uletrec of (Ident.t * ulambda) list * ulambda
   | Uprim of primitive * ulambda list * Debuginfo.t
   | Uswitch of ulambda * ulambda_switch
@@ -50,7 +50,7 @@ and ulambda_switch =
 
 (* Description of known functions *)
 
-type function_description =
+and function_description =
   { fun_label: function_label;          (* Label of direct entry point *)
     fun_arity: int;                     (* Number of arguments *)
     mutable fun_closed: bool;           (* True if environment not used *)
@@ -58,7 +58,7 @@ type function_description =
 
 (* Approximation of values *)
 
-type value_approximation =
+and value_approximation =
     Value_closure of function_description * value_approximation
   | Value_tuple of value_approximation array
   | Value_unknown

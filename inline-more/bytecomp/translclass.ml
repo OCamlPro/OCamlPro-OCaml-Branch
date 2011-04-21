@@ -53,7 +53,7 @@ let transl_label l = share (Const_immstring l)
 let rec transl_meth_list lst =
   if lst = [] then Lconst (Const_pointer 0) else
   share (Const_block
-            (0, List.map (fun lab -> Const_immstring lab) lst))
+            (Immutable, 0, List.map (fun lab -> Const_immstring lab) lst))
 
 let set_inst_var obj id expr =
   let kind = if Typeopt.maybe_pointer expr then Paddrarray else Pintarray in

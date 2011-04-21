@@ -208,7 +208,7 @@ let emit_instr = function
           if i >= 0 && i <= 3
           then out (opCONST0 + i)
           else (out opCONSTINT; out_int i)
-      | Const_block(t, []) ->
+      | Const_block(_, t, []) ->
           if t = 0 then out opATOM0 else (out opATOM; out_int t)
       | _ ->
           out opGETGLOBAL; slot_for_literal sc
@@ -332,7 +332,7 @@ let rec emit = function
           if i >= 0 && i <= 3
           then out (opPUSHCONST0 + i)
           else (out opPUSHCONSTINT; out_int i)
-      | Const_block(t, []) ->
+      | Const_block(_, t, []) ->
           if t = 0 then out opPUSHATOM0 else (out opPUSHATOM; out_int t)
       | _ ->
           out opPUSHGETGLOBAL; slot_for_literal sc

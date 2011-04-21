@@ -139,7 +139,7 @@ let init () =
         try List.assoc name Predef.builtin_values
         with Not_found -> fatal_error "Symtable.init" in
       let c = slot_for_setglobal id in
-      let cst = Const_block(0, [Const_base(Const_string name)]) in
+      let cst = Const_block(Immutable, 0, [Const_base(Const_string name)]) in
       literal_table := (c, cst) :: !literal_table)
     Runtimedef.builtin_exceptions;
   (* Initialize the known C primitives *)
@@ -205,7 +205,7 @@ let rec transl_const = function
   | Const_base(Const_nativeint i) -> Obj.repr i
   | Const_pointer i -> Obj.repr i
   | Const_immstring s -> Obj.repr s
-  | Const_block(tag, fields) ->
+  | Const_block(_, tag, fields) ->
       let block = Obj.new_block tag (List.length fields) in
       let pos = ref 0 in
       List.iter

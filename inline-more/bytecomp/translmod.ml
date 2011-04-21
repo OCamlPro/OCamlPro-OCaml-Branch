@@ -116,7 +116,7 @@ let undefined_location loc =
   let pos = loc.Location.loc_start in
   let line = pos.Lexing.pos_lnum in
   let char = pos.Lexing.pos_cnum - pos.Lexing.pos_bol in
-  Lconst(Const_block(0,
+  Lconst(Const_block(Immutable, 0,
                      [Const_base(Const_string fname);
                       Const_base(Const_int line);
                       Const_base(Const_int char)]))
@@ -127,7 +127,7 @@ let init_shape modl =
       Tmty_ident _ ->
         raise Not_found
     | Tmty_signature sg ->
-        Const_block(0, [Const_block(0, init_shape_struct env sg)])
+        Const_block(Mutable, 0, [Const_block(Mutable, 0, init_shape_struct env sg)])
     | Tmty_functor(id, arg, res) ->
         raise Not_found (* can we do better? *)
   and init_shape_struct env sg =

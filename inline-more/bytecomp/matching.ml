@@ -2551,7 +2551,7 @@ let partial_function loc () =
   let char = pos.Lexing.pos_cnum - pos.Lexing.pos_bol in
   Lprim(Praise, [Lprim(Pmakeblock(0, Immutable),
           [transl_path Predef.path_match_failure;
-           Lconst(Const_block(0,
+           Lconst(Const_block(Immutable, 0,
               [Const_base(Const_string fname);
                Const_base(Const_int line);
                Const_base(Const_int char)]))])])

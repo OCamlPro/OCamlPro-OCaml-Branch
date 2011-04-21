@@ -55,7 +55,7 @@ let occurs_var var u =
     | Ugeneric_apply(funct, args, _) -> occurs funct || List.exists occurs args
     | Uclosure(fundecls, clos) -> List.exists occurs clos
     | Uoffset(u, ofs) -> occurs u
-    | Ulet(id, def, body) -> occurs def || occurs body
+    | Ulet(id, def, _, body) -> occurs def || occurs body
     | Uletrec(decls, body) ->
         List.exists (fun (id, u) -> occurs u) decls || occurs body
     | Uprim(p, args, _) -> List.exists occurs args
@@ -136,7 +136,7 @@ let lambda_smaller lam threshold =
         raise Exit (* inlining would duplicate function definitions *)
     | Uoffset(lam, ofs) ->
         incr size; lambda_size lam
-    | Ulet(id, lam, body) ->
+    | Ulet(id, lam, _, body) ->
         lambda_size lam; lambda_size body
     | Uletrec(bindings, body) ->
         raise Exit (* usually too large *)
@@ -282,9 +282,9 @@ let rec substitute sb ulam =
            let rec body and use only the substituted term. *)
       Uclosure(defs, List.map (substitute sb) env)
   | Uoffset(u, ofs) -> Uoffset(substitute sb u, ofs)
-  | Ulet(id, u1, u2) ->
+  | Ulet(id, u1, _, u2) ->
       let id' = Ident.rename id in
-      Ulet(id', substitute sb u1, substitute (Tbl.add id (Uvar id') sb) u2)
+      Ulet(id', substitute sb u1, Value_unknown, substitute (Tbl.add id (Uvar id') sb) u2)
   | Uletrec(bindings, body) ->
       let bindings1 =
         List.map (fun (id, rhs) -> (id, Ident.rename id, rhs)) bindings in
@@ -341,16 +341,89 @@ let rec substitute sb ulam =
 
 let is_simple_argument = function
     Uvar _ -> true
-  | Uconst(Const_base(Const_int _ | Const_char _ | Const_float _ |
-                      Const_int32 _ | Const_int64 _ | Const_nativeint _),_) ->
-      true
-  | Uconst(Const_pointer _, _) -> true
+  | Uconst _ -> true
+  | _ -> false
+
+(* Check if an ulambda term is ``pure'',
+   that is without side-effects *and* not containing function definitions *)
+
+(* OCamlPro: the same function as is_pure, but for ulambda terms *)
+(* OCamlPro: better approximation of purity for primitives *)
+let rec ulambda_is_pure = function
+Uvar v -> true
+  | Uconst _ -> true
+  | Uprim(p, args, _) ->
+    begin
+      match p with
+	| Psetglobal _ | Psetfield _ | Psetfloatfield _ | Pduprecord _ |
+            Pccall _ | Praise | Poffsetref _ | Pstringsetu | Pstringsets |
+		Parraysetu _ | Parraysets _ | Pbigarrayset _ -> false
+
+	| Plazyforce _ (* side effects *)
+
+	| Pmodbint _ (* raise Division_by_zero *)
+	| Pdivbint _
+	| Pdivfloat
+	| Pmulfloat
+	| Pmodint
+	| Pdivint
+
+	| Pcvtbint (_, _) (* raise conversion errors *)
+	| Pintofbint _
+	| Pbintofint _
+	| Pfloatofint
+	| Pintoffloat
+
+	| Parrayrefs _ (* raise bound check errors *)
+	| Pbigarrayref _
+	| Parrayrefu _
+	| Pmakearray _
+	| Pstringrefs
+	| Pstringrefu
+
+	     -> false
+
+	| Psubfloat
+	| Paddfloat
+	| Pabsfloat
+	| Pnegfloat
+	| Pasrint
+	| Plsrint
+	| Plslint
+	| Pxorint
+	| Porint
+	| Pandint
+	| Pmulint
+	| Psubint
+	| Paddint
+	| Pnegint
+	| Pnot
+	| Psequor
+	| Psequand
+	| Pignore
+	| Pidentity
+	| Pstringlength
+	| Poffsetint _
+	| Pintcomp _
+	| Pfloatfield _
+	| Pfield _
+	| Pmakeblock (_, _)
+	| Pbittest
+	| Pisout
+	| Pisint
+	| Pfloatcomp _
+	| Parraylength _
+	| Pbintcomp (_, _)|Pasrbint _|Plsrbint _|Plslbint _
+	| Pxorbint _|Porbint _|Pandbint _| Pmulbint _ | Psubbint _
+	| Paddbint _|Pnegbint _
+	| Pgetglobal _ ->
+	  List.for_all ulambda_is_pure args
+    end
   | _ -> false
 
 let no_effects = function
     Uclosure _ -> true
-  | Uconst(Const_base(Const_string _),_) -> true
-  | u -> is_simple_argument u
+  | ulam -> ulambda_is_pure ulam
 
 let rec bind_params_rec subst params args body =
   match (params, args) with
@@ -362,7 +435,7 @@ let rec bind_params_rec subst params args body =
         let p1' = Ident.rename p1 in
         let body' =
           bind_params_rec (Tbl.add p1 (Uvar p1') subst) pl al body in
-        if occurs_var p1 body then Ulet(p1', a1, body')
+        if occurs_var p1 body then Ulet(p1', a1, Value_unknown, body')
         else if no_effects a1 then body'
         else Usequence(a1, body')
       end
@@ -384,16 +457,6 @@ let rec is_pure = function
            Parraysetu _ | Parraysets _ | Pbigarrayset _), _) -> false
   | Lprim(p, args) -> List.for_all is_pure args
   | Levent(lam, ev) -> is_pure lam
-  | _ -> false
-
-(* OCamlPro: the same function as is_pure, but for ulambda terms *)
-let rec ulambda_is_pure = function
-    Uvar v -> true
-  | Uconst _ -> true
-  | Uprim((Psetglobal _ | Psetfield _ | Psetfloatfield _ | Pduprecord _ |
-           Pccall _ | Praise | Poffsetref _ | Pstringsetu | Pstringsets |
-           Parraysetu _ | Parraysets _ | Pbigarrayset _), _, _) -> false
-  | Uprim(p, args, _) -> List.for_all ulambda_is_pure args
   | _ -> false
 
 (* Generate a direct application *)
@@ -495,6 +558,14 @@ let close_approx_var fenv cenv id =
       let subst = try Tbl.find id cenv with Not_found -> Uvar id in
       (subst, approx)
 
+(* OCamlPro: better approximation of constants. Blocks should be approximated as tuples. *)
+let rec approx_const = function
+    Const_base(Const_int n) -> Value_integer n
+  | Const_base(Const_char c) -> Value_integer(Char.code c)
+  | Const_pointer n -> Value_constptr n
+  | Const_block (Immutable, tag, args) -> Value_tuple (Array.of_list (List.map approx_const args))
+  | _ -> Value_unknown
+
 let close_var fenv cenv id =
   let (ulam, app) = close_approx_var fenv cenv id in ulam
 
@@ -502,12 +573,14 @@ let rec close fenv cenv = function
     Lvar id ->
       close_approx_var fenv cenv id
   | Lconst cst ->
-      begin match cst with
-        Const_base(Const_int n) -> (Uconst (cst,None), Value_integer n)
-      | Const_base(Const_char c) -> (Uconst (cst,None), Value_integer(Char.code c))
-      | Const_pointer n -> (Uconst (cst, None), Value_constptr n)
-      | _ -> (Uconst (cst, Some (Compilenv.new_structured_constant cst true)), Value_unknown)
-      end
+    let ucst = match cst with
+        Const_base(Const_int n) -> Uconst (cst,None)
+      | Const_base(Const_char c) -> Uconst (cst,None)
+      | Const_pointer n -> Uconst (cst, None)
+      | _ -> Uconst (cst, Some (Compilenv.new_structured_constant cst true))
+    in
+    (ucst, approx_const cst)
+
   | Lfunction(kind, params, body) as funct ->
       close_one_function fenv cenv (Ident.create "fun") funct
 
@@ -528,9 +601,10 @@ let rec close fenv cenv = function
               let app = direct_apply fundesc ufunct uargs in
               (app, strengthen_approx app approx_res)
 
-      (* When the closure is partially applied, we can eta-expanse it
-	 by converting [f a] in [let a' = a in fun b c -> f a b c]
-	 when fun_arity > nargs *)
+	    (* OCamlPro: When the closure is partially applied, we can
+	       eta-expanse it by converting [f a] in [let a' = a in fun b c
+	       -> f a b c] when fun_arity > nargs *)
+
 	    | _ when nargs < fundesc.fun_arity ->
 	      let first_args = List.map (fun arg ->
 		(Ident.create "arg", arg) ) args in
@@ -552,18 +626,25 @@ let rec close fenv cenv = function
 	      in
 	      close fenv cenv new_fun
 
-	    (* When one argument is given, and the function is tuplified,
-	       i.e. each element in the tuple is passed as a different
-	       argument, we can deconstruct the argument. For example, if
-	       [f] has arity -2, i.e. it expects a pair as argument:
+	    (* OCamlPro: When one argument is given, and the function
+	       is tuplified, i.e. each element in the tuple is passed
+	       as a different argument, we can deconstruct the
+	       argument. For example, if [f] has arity -2, i.e. it
+	       expects a pair as argument:
 
 	       [f x] becomes [f (fst x) (snd x)]
 
 	       i.e. a full application that can be translated to a direct call or inline.
 	    *)
+
 	    | [ arg ] when fundesc.fun_arity < 0  ->
               let (uarg, arg_approx) = close fenv cenv arg in
-              let arg_name = Ident.create "arg" in
+              let (arg_name, embbed) = match uarg with
+		  Uvar arg_name -> (arg_name, (fun app -> app))
+		| _ ->
+		  let arg_name = Ident.create "arg" in
+		  (arg_name, fun app -> Ulet( arg_name, uarg, arg_approx, app))
+	      in
               let arg_approx =
 		match arg_approx with
 		    Value_tuple tuple -> tuple
@@ -575,7 +656,7 @@ let rec close fenv cenv = function
 		 ))
               in
               let app = direct_apply fundesc ufunct uargs in
-              let app = Ulet( arg_name, uarg , app ) in
+              let app = embbed app in
               (app, strengthen_approx app approx_res)
 
 	    | _ when fundesc.fun_arity > 0 && nargs > fundesc.fun_arity ->
@@ -599,13 +680,13 @@ let rec close fenv cenv = function
     begin match (str, alam) with
         (Variable, _) ->
           let (ubody, abody) = close fenv cenv body in
-          (Ulet(id, ulam, ubody), abody)
+          (Ulet(id, ulam, alam, ubody), abody)
       | (_, (Value_integer _ | Value_constptr _))
           when str = Alias || is_pure lam ->
         close (Tbl.add id alam fenv) cenv body
       | (_, _) ->
         let (ubody, abody) = close (Tbl.add id alam fenv) cenv body in
-        (Ulet(id, ulam, ubody), abody)
+        (Ulet(id, ulam, alam, ubody), abody)
     end
   | Lletrec(defs, body) ->
     if List.for_all
@@ -625,7 +706,7 @@ let rec close fenv cenv = function
             (fun (id, pos, approx) sb ->
               Tbl.add id (Uoffset(Uvar clos_ident, pos)) sb)
             infos Tbl.empty in
-        (Ulet(clos_ident, clos, substitute sb ubody),
+        (Ulet(clos_ident, clos, approx, substitute sb ubody),
          approx)
       end else begin
         (* General case: recursive definition of values *)

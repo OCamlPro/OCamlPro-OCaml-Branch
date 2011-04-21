@@ -23,6 +23,26 @@ open Lambda
 open Clambda
 open Format
 
+
+let rec approx ppf v =
+  match v with
+    | Value_tuple args ->
+      let nargs = Array.length args in
+      assert (nargs > 0);
+      fprintf ppf "@[<2>(%a" approx args.(0);
+      for i = 1 to nargs-1 do
+	fprintf ppf ", %a" approx args.(i)
+      done;
+      fprintf ppf ")@]"
+    | Value_unknown -> fprintf ppf "?"
+    | Value_integer n -> fprintf ppf "@[<2>int %d@]" n
+    | Value_constptr n -> fprintf ppf "@[<2>cstptr %d@]" n
+    | Value_closure (f,res) ->
+      fprintf ppf "fun %s {%d}%s%s -> %a" f.fun_label f.fun_arity
+	(if f.fun_closed then " closed" else "")
+	(match f.fun_inline with None -> "" | _ -> " inline")
+	approx res
+
 let array_iter2 f a b =
   let len_a = Array.length a in
 (*  let len_b = Array.length b in
@@ -105,13 +125,18 @@ let rec lam ppf l =
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
 *)
-  | Ulet(id, arg, body) ->
+  | Ulet(id, arg, app, body) ->
       let rec letbody = function
-        | Ulet(id, arg, body) ->
-            fprintf ppf "@ @[<2>%a%s@ %a@]" Ident.print id "" (* (string_of_let_kind str) *) lam arg;
+        | Ulet(id, arg, app, body) ->
+            fprintf ppf "@ @[<2>%s%a {%a} = @ %a@]" "" Ident.print id (* (string_of_let_kind str) *)
+	      approx app
+	      lam arg;
             letbody body
         | expr -> expr in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a%s@ %a@]" Ident.print id "" (* (string_of_let_kind str) *) lam arg;
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%s%a {%a} = @ %a@]" "" Ident.print id
+ (* (string_of_let_kind str) *)
+	approx app
+	lam arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
 

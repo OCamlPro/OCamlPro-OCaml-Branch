@@ -1,5 +1,11 @@
 2011/04/21:
- * Implemented total application of tuple functions receiving something else as argument.
+ * Implemented total application of tuple functions receiving something else as argument (closure.ml)
+ * Added mutable_flag to Const_block to allow approximation of blocks in closure.ml (lambda.ml)
+ * Better approximation of constant blocks (closure.ml)
+ * Better approximation of purity for primitives (closure.ml)
+ * Removed the evaluation of arguments of inlined functions when they are useless and
+    without effect (closure.ml)
+ * See results in examples/00002
 
 2011/03/01:
  * Implemented flattening of nested structures in Translmod.transl_store_structure

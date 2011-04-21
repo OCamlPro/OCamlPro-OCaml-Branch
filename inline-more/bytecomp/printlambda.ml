@@ -29,12 +29,13 @@ let rec struct_const ppf = function
   | Const_base(Const_int64 n) -> fprintf ppf "%LiL" n
   | Const_base(Const_nativeint n) -> fprintf ppf "%nin" n
   | Const_pointer n -> fprintf ppf "%ia" n
-  | Const_block(tag, []) ->
+  | Const_block(_, tag, []) ->
       fprintf ppf "[%i]" tag
-  | Const_block(tag, sc1::scl) ->
+  | Const_block(mut, tag, sc1::scl) ->
       let sconsts ppf scl =
         List.iter (fun sc -> fprintf ppf "@ %a" struct_const sc) scl in
-      fprintf ppf "@[<1>[%i:@ @[%a%a@]]@]" tag struct_const sc1 sconsts scl
+      fprintf ppf "@[<1>[%s%i:@ @[%a%a@]]@]" (match mut with Mutable -> "mut " | Immutable -> "")
+	tag struct_const sc1 sconsts scl
   | Const_float_array [] ->
       fprintf ppf "[| |]"
   | Const_float_array (f1 :: fl) ->

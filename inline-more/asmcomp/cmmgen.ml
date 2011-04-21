@@ -386,7 +386,7 @@ type rhs_kind =
 let rec expr_size = function
   | Uclosure(fundecls, clos_vars) ->
       RHS_block (fundecls_size fundecls + List.length clos_vars)
-  | Ulet(id, exp, body) ->
+  | Ulet(id, exp, _, body) ->
       expr_size body
   | Uletrec(bindings, body) ->
       expr_size body
@@ -867,7 +867,7 @@ let rec transl = function
               (List.map transl args) dbg
         | _ ->
             bind "met" (lookup_tag obj (transl met)) (call_met obj args))
-  | Ulet(id, exp, body) ->
+  | Ulet(id, exp, _, body) ->
       begin match is_unboxed_number exp with
         No_unboxing ->
           Clet(id, transl exp, transl body)
@@ -887,7 +887,7 @@ let rec transl = function
         (Pgetglobal id, []) ->
           Cconst_symbol (Ident.name id)
       | (Pmakeblock(tag, mut), []) ->
-          transl_constant(Const_block(tag, []))
+          transl_constant(Const_block(mut, tag, []))
       | (Pmakeblock(tag, mut), args) ->
           make_alloc tag (List.map transl args)
       | (Pccall prim, args) ->
@@ -899,7 +899,7 @@ let rec transl = function
             Cop(Cextcall(Primitive.native_name prim, typ_addr, prim.prim_alloc, dbg),
                 List.map transl args)
       | (Pmakearray kind, []) ->
-          transl_constant(Const_block(0, []))
+          transl_constant(Const_block(Mutable, 0, []))
       | (Pmakearray kind, args) ->
           begin match kind with
             Pgenarray ->
@@ -1574,7 +1574,7 @@ let rec emit_constant symb cst cont =
   | Const_base(Const_nativeint n) ->
       Cint(boxedintnat_header) :: Cdefine_symbol symb ::
       emit_boxed_nativeint_constant n cont
-  | Const_block(tag, fields) ->
+  | Const_block(mut, tag, fields) ->
       let (emit_fields, cont1) = emit_constant_fields fields cont in
       Cint(block_header tag (List.length fields)) ::
       Cdefine_symbol symb ::
@@ -1637,7 +1637,7 @@ and emit_constant_field field cont =
   | Const_pointer n ->
       (Cint(Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n),
        cont)
-  | Const_block(tag, fields) ->
+  | Const_block(mut, tag, fields) ->
       let lbl = Compilenv.new_const_label() in
       let (emit_fields, cont1) = emit_constant_fields fields cont in
       (Clabel_address lbl,
@@ -2103,7 +2103,7 @@ let predef_exception name =
   let bucketname = "caml_bucket_" ^ name in
   let symname = "caml_exn_" ^ name in
   Cdata(Cglobal_symbol symname ::
-        emit_constant symname (Const_block(0,[Const_base(Const_string name)]))
+        emit_constant symname (Const_block(Immutable, 0,[Const_base(Const_string name)]))
         [ Cglobal_symbol bucketname;
           Cint(block_header 0 1);
           Cdefine_symbol bucketname;

@@ -541,7 +541,7 @@ let assert_failed loc =
   let char = pos.Lexing.pos_cnum - pos.Lexing.pos_bol in
   Lprim(Praise, [Lprim(Pmakeblock(0, Immutable),
           [transl_path Predef.path_assert_failure;
-           Lconst(Const_block(0,
+           Lconst(Const_block(Immutable, 0,
               [Const_base(Const_string fname);
                Const_base(Const_int line);
                Const_base(Const_int char)]))])])
@@ -648,7 +648,7 @@ and transl_exp0 e =
   | Texp_tuple el ->
       let ll = transl_list el in
       begin try
-        Lconst(Const_block(0, List.map extract_constant ll))
+        Lconst(Const_block(Immutable, 0, List.map extract_constant ll))
       with Not_constant ->
         Lprim(Pmakeblock(0, Immutable), ll)
       end
@@ -659,7 +659,7 @@ and transl_exp0 e =
           Lconst(Const_pointer n)
       | Cstr_block n ->
           begin try
-            Lconst(Const_block(n, List.map extract_constant ll))
+            Lconst(Const_block(Immutable, n, List.map extract_constant ll))
           with Not_constant ->
             Lprim(Pmakeblock(n, Immutable), ll)
           end
@@ -673,7 +673,7 @@ and transl_exp0 e =
       | Some arg ->
           let lam = transl_exp arg in
           try
-            Lconst(Const_block(0, [Const_base(Const_int tag);
+            Lconst(Const_block(Immutable, 0, [Const_base(Const_int tag);
                                    extract_constant lam]))
           with Not_constant ->
             Lprim(Pmakeblock(0, Immutable),
@@ -705,7 +705,7 @@ and transl_exp0 e =
         let master =
           match kind with
           | Paddrarray | Pintarray ->
-              Lconst(Const_block(0, cl))
+              Lconst(Const_block(Mutable, 0, cl))
           | Pfloatarray ->
               Lconst(Const_float_array(List.map extract_float cl))
           | Pgenarray ->
@@ -980,7 +980,7 @@ and transl_record all_labels repres lbl_expr_list opt_init_expr =
         if mut = Mutable then raise Not_constant;
         let cl = List.map extract_constant ll in
         match repres with
-          Record_regular -> Lconst(Const_block(0, cl))
+          Record_regular -> Lconst(Const_block(mut, 0, cl))
         | Record_float ->
             Lconst(Const_float_array(List.map extract_float cl))
       with Not_constant ->

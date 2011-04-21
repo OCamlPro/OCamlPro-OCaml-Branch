@@ -91,7 +91,7 @@ let rec print_struct_const = function
   | Const_base(Const_nativeint i) -> printf "%ndn" i
   | Const_base(Const_int64 i) -> printf "%LdL" i
   | Const_pointer n -> printf "%da" n
-  | Const_block(tag, args) ->
+  | Const_block(_, tag, args) ->
       printf "<%d>" tag;
       begin match args with
         [] -> ()
