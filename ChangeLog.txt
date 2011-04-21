@@ -1,4 +1,7 @@
-2010/03/01:
+2011/04/21:
+ * Implemented total application of tuple functions receiving something else as argument.
+
+2011/03/01:
  * Implemented flattening of nested structures in Translmod.transl_store_structure
 
 2010/11/29:

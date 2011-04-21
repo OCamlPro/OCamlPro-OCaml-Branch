@@ -386,21 +386,36 @@ let rec is_pure = function
   | Levent(lam, ev) -> is_pure lam
   | _ -> false
 
+(* OCamlPro: the same function as is_pure, but for ulambda terms *)
+let rec ulambda_is_pure = function
+    Uvar v -> true
+  | Uconst _ -> true
+  | Uprim((Psetglobal _ | Psetfield _ | Psetfloatfield _ | Pduprecord _ |
+           Pccall _ | Praise | Poffsetref _ | Pstringsetu | Pstringsets |
+           Parraysetu _ | Parraysets _ | Pbigarrayset _), _, _) -> false
+  | Uprim(p, args, _) -> List.for_all ulambda_is_pure args
+  | _ -> false
+
 (* Generate a direct application *)
 
-let direct_apply fundesc funct ufunct uargs =
-  let app_args =
-    if fundesc.fun_closed then uargs else uargs @ [ufunct] in
+(* OCamlPro: removed [funct] argument, that was only used to check
+ * purity. Instead, we implemented [ulambda_is_pure] to be able to test
+ * purity on ulambda functions. *)
+(* OCamlPro: keep an approximation of the arguments in [uargs] *)
+let direct_apply fundesc ufunct uargs =
+  let uargs =
+    if fundesc.fun_closed then uargs else uargs @ [ufunct, Value_unknown ] in
+  let app_args = List.map fst uargs in
   let app =
     match fundesc.fun_inline with
-      None -> Udirect_apply(fundesc.fun_label, app_args, Debuginfo.none)
-    | Some(params, body) -> bind_params params app_args body in
+	None -> Udirect_apply(fundesc.fun_label, app_args, Debuginfo.none)
+      | Some(params, body) -> bind_params params app_args body in
   (* If ufunct can contain side-effects or function definitions,
      we must make sure that it is evaluated exactly once.
      If the function is not closed, we evaluate ufunct as part of the
      arguments.
      If the function is closed, we force the evaluation of ufunct first. *)
-  if not fundesc.fun_closed || is_pure funct
+  if not fundesc.fun_closed || ulambda_is_pure ufunct
   then app
   else Usequence(ufunct, app)
 
@@ -496,76 +511,107 @@ let rec close fenv cenv = function
   | Lfunction(kind, params, body) as funct ->
       close_one_function fenv cenv (Ident.create "fun") funct
 
-(* we want to convert [f a] in [let a' = a in fun b c -> f a b c] when
-   fun_arity > nargs *)
   | Lapply(funct, args, loc) ->
       let nargs = List.length args in
-      begin match (close fenv cenv funct, close_list fenv cenv args) with
-        ((ufunct, Value_closure(fundesc, approx_res)),
-         [Uprim(Pmakeblock(_, _), uargs, _)])
-        when List.length uargs = - fundesc.fun_arity ->
-          let app = direct_apply fundesc funct ufunct uargs in
-          (app, strengthen_approx app approx_res)
-      | ((ufunct, Value_closure(fundesc, approx_res)), uargs)
-        when nargs = fundesc.fun_arity ->
-          let app = direct_apply fundesc funct ufunct uargs in
-          (app, strengthen_approx app approx_res)
+      let (ufunct, fun_approx) = close fenv cenv funct in
+      let uargs = List.map (close fenv cenv) args in
+      begin match fun_approx with
+        | Value_closure(fundesc, approx_res) ->
+	  begin match args with
+                [Lprim(Pmakeblock(_, _), args)]
+                  when List.length args = - fundesc.fun_arity ->
+                    let uargs' = List.map (close fenv cenv) args in
+                    let app = direct_apply fundesc ufunct uargs' in
+                    (app, strengthen_approx app approx_res)
 
-      | ((ufunct, Value_closure(fundesc, approx_res)), uargs)
-          when nargs < fundesc.fun_arity ->
+	    | _ when nargs = fundesc.fun_arity ->
+              let app = direct_apply fundesc ufunct uargs in
+              (app, strengthen_approx app approx_res)
 
-	let first_args = List.map (fun arg ->
-	  (Ident.create "arg", arg) ) args in
-	let final_args = Array.to_list (Array.init (fundesc.fun_arity - nargs) (fun _ ->
-	  Ident.create "arg")) in
-	let rec iter args body =
-	  match args with
-	      [] -> body
-	    | (arg1, arg2) :: args ->
-	      iter args
-		(Llet ( Strict, arg1, arg2, body))
-	in
-	let new_fun = iter first_args
-	  (Lfunction(
-	    Curried, final_args,
-	    Lapply(funct, (List.map (fun (arg1, arg2) ->
-	      Lvar arg1) first_args) @ (List.map (fun arg ->
-		Lvar arg ) final_args), loc)))
-	in
-	close fenv cenv new_fun
+      (* When the closure is partially applied, we can eta-expanse it
+	 by converting [f a] in [let a' = a in fun b c -> f a b c]
+	 when fun_arity > nargs *)
+	    | _ when nargs < fundesc.fun_arity ->
+	      let first_args = List.map (fun arg ->
+		(Ident.create "arg", arg) ) args in
+	      let final_args = Array.to_list (Array.init (fundesc.fun_arity - nargs) (fun _ ->
+		Ident.create "arg")) in
+	      let rec iter args body =
+		match args with
+		    [] -> body
+		  | (arg1, arg2) :: args ->
+		    iter args
+		      (Llet ( Strict, arg1, arg2, body))
+	      in
+	      let new_fun = iter first_args
+		(Lfunction(
+		  Curried, final_args,
+		  Lapply(funct, (List.map (fun (arg1, arg2) ->
+		    Lvar arg1) first_args) @ (List.map (fun arg ->
+		      Lvar arg ) final_args), loc)))
+	      in
+	      close fenv cenv new_fun
 
-      | ((ufunct, Value_closure(fundesc, approx_res)), uargs)
-        when fundesc.fun_arity > 0 && nargs > fundesc.fun_arity ->
-          let (first_args, rem_args) = split_list fundesc.fun_arity uargs in
-          (Ugeneric_apply(direct_apply fundesc funct ufunct first_args,
-                          rem_args, Debuginfo.none),
-           Value_unknown)
-      | ((ufunct, _), uargs) ->
-          (Ugeneric_apply(ufunct, uargs, Debuginfo.none), Value_unknown)
+	    (* When one argument is given, and the function is tuplified,
+	       i.e. each element in the tuple is passed as a different
+	       argument, we can deconstruct the argument. For example, if
+	       [f] has arity -2, i.e. it expects a pair as argument:
+
+	       [f x] becomes [f (fst x) (snd x)]
+
+	       i.e. a full application that can be translated to a direct call or inline.
+	    *)
+	    | [ arg ] when fundesc.fun_arity < 0  ->
+              let (uarg, arg_approx) = close fenv cenv arg in
+              let arg_name = Ident.create "arg" in
+              let arg_approx =
+		match arg_approx with
+		    Value_tuple tuple -> tuple
+		  | _ -> Array.create (-fundesc.fun_arity) Value_unknown
+              in
+              let uargs = Array.to_list
+		(Array.init (-fundesc.fun_arity) (fun i ->
+		  (Uprim (Pfield i, [ Uvar arg_name ], Debuginfo.none), arg_approx.(i))
+		 ))
+              in
+              let app = direct_apply fundesc ufunct uargs in
+              let app = Ulet( arg_name, uarg , app ) in
+              (app, strengthen_approx app approx_res)
+
+	    | _ when fundesc.fun_arity > 0 && nargs > fundesc.fun_arity ->
+              let (first_args, rem_args) = split_list fundesc.fun_arity uargs in
+              (Ugeneric_apply(direct_apply fundesc ufunct first_args,
+                              List.map fst rem_args, Debuginfo.none),
+               Value_unknown)
+	    | _ ->
+              (Ugeneric_apply(ufunct, List.map fst uargs, Debuginfo.none), Value_unknown)
+	  end
+	| _ ->
+          (Ugeneric_apply(ufunct, List.map fst uargs, Debuginfo.none), Value_unknown)
       end
   | Lsend(kind, met, obj, args) ->
-      let (umet, _) = close fenv cenv met in
-      let (uobj, _) = close fenv cenv obj in
-      (Usend(kind, umet, uobj, close_list fenv cenv args, Debuginfo.none),
-       Value_unknown)
+    let (umet, _) = close fenv cenv met in
+    let (uobj, _) = close fenv cenv obj in
+    (Usend(kind, umet, uobj, close_list fenv cenv args, Debuginfo.none),
+     Value_unknown)
   | Llet(str, id, lam, body) ->
-      let (ulam, alam) = close_named fenv cenv id lam in
-      begin match (str, alam) with
+    let (ulam, alam) = close_named fenv cenv id lam in
+    begin match (str, alam) with
         (Variable, _) ->
           let (ubody, abody) = close fenv cenv body in
           (Ulet(id, ulam, ubody), abody)
       | (_, (Value_integer _ | Value_constptr _))
-        when str = Alias || is_pure lam ->
-          close (Tbl.add id alam fenv) cenv body
+          when str = Alias || is_pure lam ->
+        close (Tbl.add id alam fenv) cenv body
       | (_, _) ->
-          let (ubody, abody) = close (Tbl.add id alam fenv) cenv body in
-          (Ulet(id, ulam, ubody), abody)
-      end
+        let (ubody, abody) = close (Tbl.add id alam fenv) cenv body in
+        (Ulet(id, ulam, ubody), abody)
+    end
   | Lletrec(defs, body) ->
-      if List.for_all
-           (function (id, Lfunction(_, _, _)) -> true | _ -> false)
-           defs
-      then begin
+    if List.for_all
+      (function (id, Lfunction(_, _, _)) -> true | _ -> false)
+      defs
+    then begin
         (* Simple case: only function definitions *)
         let (clos, infos) = close_functions fenv cenv defs in
         let clos_ident = Ident.create "clos" in
