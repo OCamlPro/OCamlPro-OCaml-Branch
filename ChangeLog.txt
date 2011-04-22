@@ -1,3 +1,10 @@
+2011/04/22:
+ * Added new module bytecomp/rectoloop.ml to implement transformation of recursive functions
+   to loops in lambda code. Currently, the transformation is not yet done. Rectoloop.simplify
+   is called by Simplif before doing let-simplification.
+ * Added transformation of || and && into if-then-else to make recursive functions using them
+   tailcall (see examples/00031_array_for_all)
+
 2011/04/21:
  * Implemented total application of tuple functions receiving something else as argument (closure.ml)
  * Added mutable_flag to Const_block to allow approximation of blocks in closure.ml (lambda.ml)

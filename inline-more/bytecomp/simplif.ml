@@ -409,4 +409,4 @@ let simplify_lets lam =
   in
   simplif lam
 
-let simplify_lambda lam = simplify_lets (simplify_exits lam)
+let simplify_lambda lam = simplify_lets (simplify_exits (Rectoloop.simplify lam))
