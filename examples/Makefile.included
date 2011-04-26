@@ -24,12 +24,12 @@ m2-O3.bin: code.ml Makefile
 
 m2.bin: code.ml Makefile ../Makefile.included
 	$(MAKE) new_version
-	$(OCAMLOPT) $(LIBS) -o m2.bin code.cmx
+	$(OCAMLOPT) $(OFLAGS) $(LIBS) -o m2.bin code.cmx
 	time ./m2.bin > /dev/null
 
 m1.bin:  code.ml Makefile ../Makefile.included
 	$(MAKE) old_version
-	ocamlopt $(LIBS) -o m1.bin code.cmx
+	ocamlopt $(OFLAGS) $(LIBS) -o m1.bin code.cmx
 	time ./m1.bin > /dev/null
 
 times: m1.bin m2-O0.bin m2-O1.bin m2-O3.bin

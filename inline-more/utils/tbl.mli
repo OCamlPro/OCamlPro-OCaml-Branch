@@ -26,6 +26,10 @@ val iter: ('a -> 'b -> unit) -> ('a, 'b) t -> unit
 val map: ('a -> 'b -> 'c) -> ('a, 'b) t -> ('a, 'c) t
 val fold: ('a -> 'b -> 'c -> 'c) -> ('a, 'b) t -> 'c -> 'c
 
+val is_empty : ('a, 'b) t -> bool
+val is_singleton : ('a, 'b) t -> bool
+val head : ('a,'b) t -> 'a * 'b
+
 open Format
 
 val print: (formatter -> 'a -> unit) -> (formatter -> 'b -> unit) ->

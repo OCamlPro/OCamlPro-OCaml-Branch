@@ -14,6 +14,44 @@
 
 (* Command-line parameters *)
 
+
+let debug_flags = Hashtbl.create 13
+
+let add_debug_flag name refs =
+  Hashtbl.add debug_flags name refs
+
+let set_debug s v =
+  if s = "all" then begin
+    Hashtbl.iter (fun _ refs -> List.iter (fun r -> r := v) refs) debug_flags
+  end
+  else
+  try
+    let refs = Hashtbl.find debug_flags s in
+    List.iter (fun r -> r := v) refs
+  with Not_found ->
+    Printf.fprintf stderr "Warning: '%s' no such debug flag\n%!" s
+
+let set_debug x =
+  let len = String.length x in
+  if len > 0 then
+    match x.[0] with
+      |	'+' -> set_debug (String.sub x 1 (len-1)) true
+      |	'-' -> set_debug (String.sub x 1 (len-1)) false
+      | _ -> set_debug x true
+
+let set_debug x =
+  let len = String.length x in
+  let rec iter pos =
+    if pos < len then
+      try
+	let pos2 = String.index_from x pos ',' in
+	set_debug (String.sub x pos (pos2-pos));
+	iter (pos2+1)
+      with Not_found ->
+	set_debug (String.sub x pos (len-pos))
+  in
+  iter 0
+
 let objfiles = ref ([] : string list)   (* .cmo and .cma files *)
 and ccobjs = ref ([] : string list)     (* .o, .a, .so and -cclib -lxxx *)
 and dllibs = ref ([] : string list)     (* .so and -dllib -lxxx *)

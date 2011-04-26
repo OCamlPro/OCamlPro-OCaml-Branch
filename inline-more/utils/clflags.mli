@@ -12,6 +12,9 @@
 
 (* $Id$ *)
 
+val set_debug : string -> unit
+val add_debug_flag : string -> bool ref list -> unit
+
 val objfiles : string list ref
 val ccobjs : string list ref
 val dllibs : string list ref

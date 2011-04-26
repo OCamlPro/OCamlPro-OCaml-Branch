@@ -105,6 +105,17 @@ let rec fold f m accu =
   | Node(l, v, d, r, _) ->
       fold f r (f v d (fold f l accu))
 
+let is_empty t = t == Empty
+let is_singleton t =
+  match t with
+      Node(Empty, _, _, Empty, _) -> true
+    | _ -> false
+
+let head t = match t with
+      Node(Empty, x, data, Empty, _) -> (x, data)
+    | _ -> assert false
+
+
 open Format
 
 let print print_key print_data ppf tbl =

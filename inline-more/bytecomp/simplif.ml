@@ -409,4 +409,9 @@ let simplify_lets lam =
   in
   simplif lam
 
-let simplify_lambda lam = simplify_lets (simplify_exits (Rectoloop.simplify lam))
+let simplify_lambda lam =
+  simplify_lets
+    (Rectoloop.simplify
+       (* Must be done after simplify_exits, because simplify_exits assumes
+	  exits always appear in tailcall !!! *)
+       (simplify_exits  lam))

@@ -9,12 +9,16 @@ let sum_i list =
   in
     iter list
 
+let rec iterf sum l =
+  match l with
+      [] -> sum > 0.
+    | x :: tail ->
+      iterf (sum +. x) tail
 
 let sum_f list =
-  let rec iterf sum l =
-     match l with
-      [] -> sum > 0.
-    | x :: tail -> 
-        iterf (sum +. x) tail
-  in
-  iterf 0. list
+q  iterf 0. list
+
+let _ =
+  let t = Array.init 10_000_000 (fun i -> float i) in
+  let l = Array.to_list t in
+  ignore (sum_f l)

@@ -82,6 +82,7 @@ module Options = Main_args.Make_bytetop_options (struct
   let _drawlambda = set dump_rawlambda
   let _dlambda = set dump_lambda
   let _dinstr = set dump_instr
+  let _debug = Clflags.set_debug
 
   let anonymous s = file_argument s
 end);;

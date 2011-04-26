@@ -1,0 +1,11 @@
+MODULES=list
+COMPFLAGS=-debug rec2loop -dlambda
+
+byte:
+	for i in $(MODULES); do \
+	    ../byterun/ocamlrun ../ocamlc $(COMPFLAGS) -o test_$$i.byte test_$$i.ml; \
+	    echo Executing ./test_$$i.byte; \
+	    ../byterun/ocamlrun ./test_$$i.byte; \
+	    echo Executing ./test_$$i.byte done; \
+	done
+

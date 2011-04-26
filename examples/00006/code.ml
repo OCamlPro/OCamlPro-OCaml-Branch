@@ -15,12 +15,18 @@ let f1 x =
 let f2 x =
   let y = ref x in
   let rec iter i =
-    if i < 11 then begin
+    if i < 11_000_000 then begin
       y := !y +. 1.;
       iter (i+1)
     end
   in
+  iter 0;
     !y
+
+let _ =
+  for i = 1 to 100 do
+    ignore (f2 3.)
+  done
 
 (*
 

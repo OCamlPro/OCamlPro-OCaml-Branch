@@ -1,3 +1,10 @@
+2011/04/26:
+ * Implemented transformation of tailcall-recursive functions into loops at the lambda-code level
+   * Debugged the simple case of one recursive functions
+   * Still some problems with mutually recursive functions (Env.components_of_module)
+   * No detection of invariant arguments
+   * Slowdown noticed, because no other optimisation can really take benefit of this, right now
+
 2011/04/22:
  * Added new module bytecomp/rectoloop.ml to implement transformation of recursive functions
    to loops in lambda code. Currently, the transformation is not yet done. Rectoloop.simplify
