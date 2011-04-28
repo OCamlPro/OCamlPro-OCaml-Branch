@@ -1,4 +1,8 @@
 2011/04/29:
+ * Simplif: fixed a memory-leak by preventing inlining of alias variables under abstractions and loops
+ * Simplif: allow inlining of functions used only once
+
+2011/04/29:
  * Only perform rec2loop for functions that are escaping outside the
    recursion, but not within the recursion, to prevent stack overflows.
  * In case of success, generate code only for escaping functions.

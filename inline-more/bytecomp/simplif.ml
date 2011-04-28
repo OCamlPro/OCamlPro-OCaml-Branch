@@ -265,148 +265,183 @@ let simplify_lets lam =
   let count_var v =
     try
       !(Hashtbl.find occ v)
+    with Not_found -> 0
+  and incr_var bv v =
+    try (* bv is the set of locally bound variables, i.e. variables that can be safely inlined *)
+      incr (Tbl.find v bv)
     with Not_found ->
-      0
-  and incr_var v =
-    try
-      incr(Hashtbl.find occ v)
-    with Not_found ->
-      Hashtbl.add occ v (ref 1) in
+      try (* if the variable is not in bv, it should not be inlined. Increase its use-count by much *)
+	let r = Hashtbl.find occ v in
+	r := !r + 10
+      with Not_found -> () (* only Llet bound variables have a use-count *)
+  in
+  let new_var bv v = (* add a variable both to the global table (occ) and to the locally bound variables *)
+    let r = ref 0 in
+    Hashtbl.add occ v r;
+    Tbl.add v r bv
+  in
 
-  let rec count = function
-  | Lvar v -> incr_var v
-  | Lconst cst -> ()
-  | Lapply(l1, ll, _) -> count l1; List.iter count ll
-  | Lfunction(kind, params, l) -> count l
-  | Llet(str, v, Lvar w, l2) when not !Clflags.debug ->
+  let rec count bv lam =
+    match lam with
+      | Lvar v -> incr_var bv v
+      | Lconst cst -> ()
+      | Lapply(l1, ll, _) -> count bv l1; List.iter (count bv) ll
+      | Lfunction(kind, params, l) -> count Tbl.empty l (* empty locally-bound variables for abstractions *)
+      | Llet(str, v, Lvar w, l2) when not !Clflags.debug ->
       (* v will be replaced by w in l2, so each occurrence of v in l2
          increases w's refcount *)
-      count l2;
-      let vc = count_var v in
-      begin try
-        let r = Hashtbl.find occ w in r := !r + vc
-      with Not_found ->
-        Hashtbl.add occ w (ref vc)
-      end
-  | Llet(str, v, l1, l2) ->
-      count l2;
+	begin
+	  try
+	    let r = Hashtbl.find occ w in
+	    let bv' = new_var bv v in
+	    count bv' l2;
+	    let vc = count_var v in
+	    r := !r + vc
+	  with Not_found -> (* w is not a Llet defined variable. Don't count bv *)
+	    count bv l2
+	end
+      | Llet(str, v, l1, l2) ->
+	let bv' = new_var bv v in
+	count bv' l2;
       (* If v is unused, l1 will be removed, so don't count its variables *)
-      if str = Strict || count_var v > 0 then count l1
-  | Lletrec(bindings, body) ->
-      List.iter (fun (v, l) -> count l) bindings;
-      count body
-  | Lprim(p, ll) -> List.iter count ll
-  | Lswitch(l, sw) ->
-      count_default sw ;
-      count l;
-      List.iter (fun (_, l) -> count l) sw.sw_consts;
-      List.iter (fun (_, l) -> count l) sw.sw_blocks
-  | Lstaticraise (i,ls) -> List.iter count ls
-  | Lstaticcatch(l1, (i,_), l2) ->
-      count l1; count l2
-  | Ltrywith(l1, v, l2) -> count l1; count l2
-  | Lifthenelse(l1, l2, l3) -> count l1; count l2; count l3
-  | Lsequence(l1, l2) -> count l1; count l2
-  | Lwhile(l1, l2) -> count l1; count l2
-  | Lfor(_, l1, l2, dir, l3) -> count l1; count l2; count l3
-  | Lassign(v, l) ->
+	if str = Strict || count_var v > 0 then count bv l1
+      | Lletrec(bindings, body) ->
+	List.iter (fun (v, l) -> count bv l) bindings;
+	count bv body
+      | Lprim(p, ll) -> List.iter (count bv) ll
+      | Lswitch(l, sw) ->
+	count_default bv sw ;
+	count bv l;
+	List.iter (fun (_, l) -> count bv l) sw.sw_consts;
+	List.iter (fun (_, l) -> count bv l) sw.sw_blocks
+      | Lstaticraise (i,ls) -> List.iter (count bv) ls
+      | Lstaticcatch(l1, (i,_), l2) ->
+	count bv l1; count bv l2
+      | Ltrywith(l1, v, l2) -> count bv l1; count bv l2
+      | Lifthenelse(l1, l2, l3) -> count bv l1; count bv l2; count bv l3
+      | Lsequence(l1, l2) -> count bv l1; count bv l2
+      | Lwhile(l1, l2) -> count Tbl.empty l1; count Tbl.empty l2 (* empty locally-bound variables for loops *)
+      | Lfor(_, l1, l2, dir, l3) -> count bv l1; count bv l2;
+	count Tbl.empty l3 (* empty locally-bound variables for loops *)
+      | Lassign(v, l) ->
       (* Lalias-bound variables are never assigned, so don't increase
          v's refcount *)
-      count l
-  | Lsend(_, m, o, ll) -> List.iter count (m::o::ll)
-  | Levent(l, _) -> count l
-  | Lifused(v, l) ->
-      if count_var v > 0 then count l
+	count bv l
+      | Lsend(_, m, o, ll) -> List.iter (count bv) (m::o::ll)
+      | Levent(l, _) -> count bv l
+      | Lifused(v, l) ->
+	if count_var v > 0 then count bv l
 
-  and count_default sw = match sw.sw_failaction with
-  | None -> ()
-  | Some al ->
+  and count_default bv sw = match sw.sw_failaction with
+    | None -> ()
+    | Some al ->
       let nconsts = List.length sw.sw_consts
       and nblocks = List.length sw.sw_blocks in
       if
-        nconsts < sw.sw_numconsts && nblocks < sw.sw_numblocks
+	nconsts < sw.sw_numconsts && nblocks < sw.sw_numblocks
       then begin (* default action will occur twice in native code *)
-        count al ; count al
+	count bv al ; count bv al
       end else begin (* default action will occur once *)
-        assert (nconsts < sw.sw_numconsts || nblocks < sw.sw_numblocks) ;
-        count al
+	assert (nconsts < sw.sw_numconsts || nblocks < sw.sw_numblocks) ;
+	count bv al
       end
   in
-  count lam;
-  (* Second pass: remove Lalias bindings of unused variables,
-     and substitute the bindings of variables used exactly once. *)
+  count Tbl.empty lam;
+(* Second pass: remove Lalias bindings of unused variables,
+   and substitute the bindings of variables used exactly once. *)
 
   let subst = Hashtbl.create 83 in
 
   let rec simplif = function
-    Lvar v as l ->
-      begin try
-        Hashtbl.find subst v
+  Lvar v as l ->
+    begin try
+            Hashtbl.find subst v
       with Not_found ->
-        l
+	l
+    end
+    | Lconst cst as l -> l
+    | Lapply(Lvar v, ll, loc) ->
+      begin try
+	      let lfun = Hashtbl.find subst v in
+	      match lfun with
+		  Lfunction(Curried, args, body) when List.length args = List.length ll ->
+(*		    Printf.fprintf stderr "Simplif: inlining temporary function %s\n%!" (Ident.unique_name v); *)
+		    List.fold_left2 (fun body v arg ->
+		      Llet(Strict, v, arg, body))
+		      body args ll
+		| _ ->
+		  Lapply(lfun, List.map simplif ll, loc)
+	with Not_found ->
+	  Lapply(Lvar v, List.map simplif ll, loc)
       end
-  | Lconst cst as l -> l
-  | Lapply(l1, ll, loc) -> Lapply(simplif l1, List.map simplif ll, loc)
-  | Lfunction(kind, params, l) -> Lfunction(kind, params, simplif l)
-  | Llet(str, v, Lvar w, l2) when not !Clflags.debug ->
+    | Lapply(l1, ll, loc) -> Lapply(simplif l1, List.map simplif ll, loc)
+    | Lfunction(kind, params, l) -> Lfunction(kind, params, simplif l)
+    | Llet(str, v, Lvar w, l2) when not !Clflags.debug ->
       Hashtbl.add subst v (simplif (Lvar w));
       simplif l2
-  | Llet(Strict, v, Lprim(Pmakeblock(0, Mutable), [linit]), lbody)
-    when not !Clflags.debug ->
+    | Llet(Strict, v, Lprim(Pmakeblock(0, Mutable), [linit]), lbody)
+	when not !Clflags.debug ->
       let slinit = simplif linit in
       let slbody = simplif lbody in
       begin try
-(*	      Format.fprintf Format.err_formatter "try eliminate_ref %s@." (Ident.unique_name v);*)
-        Llet(Variable, v, slinit, eliminate_ref v slbody)
-      with Real_reference ->
-(*	Format.fprintf Format.err_formatter "try eliminate_ref %s failed@." (Ident.unique_name v); *)
-        Llet(Strict, v, Lprim(Pmakeblock(0, Mutable), [slinit]), slbody)
+	    (*	      Format.fprintf Format.err_formatter "try eliminate_ref %s@." (Ident.unique_name v);*)
+              Llet(Variable, v, slinit, eliminate_ref v slbody)
+	with Real_reference ->
+	(*	Format.fprintf Format.err_formatter "try eliminate_ref %s failed@." (Ident.unique_name v); *)
+          Llet(Strict, v, Lprim(Pmakeblock(0, Mutable), [slinit]), slbody)
       end
-  | Llet(Alias, v, l1, l2) ->
+    | Llet(Strict, v, ((Lfunction _) as lfun), body) ->
       begin match count_var v with
-        0 -> simplif l2
-      | 1 when not !Clflags.debug ->
-             Hashtbl.add subst v (simplif l1); simplif l2
-      | n -> Llet(Alias, v, simplif l1, simplif l2)
+          0 -> simplif body
+	| 1 when not !Clflags.debug ->
+          Hashtbl.add subst v (simplif lfun); simplif body
+	| n -> Llet(Strict, v, simplif lfun, simplif body)
       end
-  | Llet(StrictOpt, v, l1, l2) ->
+    | Llet(Alias, v, l1, l2) ->
       begin match count_var v with
-        0 -> simplif l2
-      | n -> Llet(Alias, v, simplif l1, simplif l2)
+          0 -> simplif l2
+	| 1 when not !Clflags.debug ->
+          Hashtbl.add subst v (simplif l1); simplif l2
+	| n -> Llet(Alias, v, simplif l1, simplif l2)
       end
-  | Llet(kind, v, l1, l2) -> Llet(kind, v, simplif l1, simplif l2)
-  | Lletrec(bindings, body) ->
+    | Llet(StrictOpt, v, l1, l2) ->
+      begin match count_var v with
+          0 -> simplif l2
+	| n -> Llet(Alias, v, simplif l1, simplif l2)
+      end
+    | Llet(kind, v, l1, l2) -> Llet(kind, v, simplif l1, simplif l2)
+    | Lletrec(bindings, body) ->
       Lletrec(List.map (fun (v, l) -> (v, simplif l)) bindings, simplif body)
-  | Lprim(p, ll) -> Lprim(p, List.map simplif ll)
-  | Lswitch(l, sw) ->
+    | Lprim(p, ll) -> Lprim(p, List.map simplif ll)
+    | Lswitch(l, sw) ->
       let new_l = simplif l
       and new_consts =  List.map (fun (n, e) -> (n, simplif e)) sw.sw_consts
       and new_blocks =  List.map (fun (n, e) -> (n, simplif e)) sw.sw_blocks
       and new_fail = match sw.sw_failaction with
-      | None -> None
-      | Some l -> Some (simplif l) in
+	| None -> None
+	| Some l -> Some (simplif l) in
       Lswitch
-        (new_l,
-         {sw with sw_consts = new_consts ; sw_blocks = new_blocks;
-                  sw_failaction = new_fail})
-  | Lstaticraise (i,ls) ->
+	(new_l,
+	 {sw with sw_consts = new_consts ; sw_blocks = new_blocks;
+           sw_failaction = new_fail})
+    | Lstaticraise (i,ls) ->
       Lstaticraise (i, List.map simplif ls)
-  | Lstaticcatch(l1, (i,args), l2) ->
+    | Lstaticcatch(l1, (i,args), l2) ->
       Lstaticcatch (simplif l1, (i,args), simplif l2)
-  | Ltrywith(l1, v, l2) -> Ltrywith(simplif l1, v, simplif l2)
-  | Lifthenelse(l1, l2, l3) -> Lifthenelse(simplif l1, simplif l2, simplif l3)
-  | Lsequence(Lifused(v, l1), l2) ->
+    | Ltrywith(l1, v, l2) -> Ltrywith(simplif l1, v, simplif l2)
+    | Lifthenelse(l1, l2, l3) -> Lifthenelse(simplif l1, simplif l2, simplif l3)
+    | Lsequence(Lifused(v, l1), l2) ->
       if count_var v > 0
       then Lsequence(simplif l1, simplif l2)
       else simplif l2
-  | Lsequence(l1, l2) -> Lsequence(simplif l1, simplif l2)
-  | Lwhile(l1, l2) -> Lwhile(simplif l1, simplif l2)
-  | Lfor(v, l1, l2, dir, l3) ->
+    | Lsequence(l1, l2) -> Lsequence(simplif l1, simplif l2)
+    | Lwhile(l1, l2) -> Lwhile(simplif l1, simplif l2)
+    | Lfor(v, l1, l2, dir, l3) ->
       Lfor(v, simplif l1, simplif l2, dir, simplif l3)
-  | Lassign(v, l) -> Lassign(v, simplif l)
-  | Lsend(k, m, o, ll) -> Lsend(k, simplif m, simplif o, List.map simplif ll)
-  | Levent(l, ev) -> Levent(simplif l, ev)
-  | Lifused(v, l) ->
+    | Lassign(v, l) -> Lassign(v, simplif l)
+    | Lsend(k, m, o, ll) -> Lsend(k, simplif m, simplif o, List.map simplif ll)
+    | Levent(l, ev) -> Levent(simplif l, ev)
+    | Lifused(v, l) ->
       if count_var v > 0 then simplif l else lambda_unit
   in
   simplif lam

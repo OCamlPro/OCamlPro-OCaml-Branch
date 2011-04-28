@@ -43,34 +43,11 @@
 
    * Detect function invariants
 
-   PROBLEM: because we are too aggressive, we try to transform
-   recursive functions that won't benefit from it. As a consequence,
-   we increase the size of these functions, and non-tailcall recursive
-   calls might lead to a stack overflow where it was not possible
-   before. WE MUST FIX THIS NOW.
+   CHECK: Is-it possible that a call that was previously tailcall becomes
+   non-tailcall ? We should take care of that !
 
-   An example in ctype.ml:
-Recursive definition:
-        unify_row_field_2290 (self-tail)(mut-rec)
-                callees: unify_2282
-        unify_row_2289 (mut-rec)
-        unify_pairs_2288
-        unify_kind_2287 (exported)(mut-rec)
-        unify_fields_2286 (mut-rec)
-        unify_list_2285 (mut-rec)
-        unify3_2284 (mut-tail)(mut-rec)
-                callers: unify2_2283
-        unify2_2283 (mut-rec)
-                callees: unify3_2284
-        unify_2282 (mut-tail)(exported)(mut-rec)
-                callers: unify_row_field_2290
-
-   We can only win something if we manage to remove some functions:
-   - we can totally remove functions that are not used
-   - if a function is mut-rec or self-rec, don't rec2loop it ?
-   - if a function is not self-tail, don't rec2loop it ?
-
-
+   CHECK: Understand why simplif_exit does not work on the generated
+   code.
 
    NOTES: * Currently, the transformation does not provide any
    speed-up. It is mostly because interesting optimisations are not
@@ -82,7 +59,7 @@ Recursive definition:
 
    Other possible optimisations:
    - force coerce, to remove use positions for values that are
-     actually not exported.
+   actually not exported.
    - inline functions that are not exported and used only once.
 
 *)
