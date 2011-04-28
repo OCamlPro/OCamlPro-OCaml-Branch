@@ -1,19 +1,20 @@
+open Externals
+
 let list_ints = [1;2;3;4;5;6;7;8;9;10]
 let list_floats = [1.;2.;3.;4.;5.;6.;7.;8.;9.;10.]
-
 
 let rec length_aux len = function
     [] -> len
   | a::l ->
-    print_int a; print_newline ();
     length_aux (len + 1) l
 
 let length l = length_aux 0 l
 
 let _ =
-  print_string "List.length..."; print_newline ();
-  assert (length list_ints = 10);
-  print_string "List.length... OK"; print_newline ();
+  if (length list_ints = 10) then
+    exit_ok ()
+  else
+    exit_bad ()
 
 (*
 let hd = function

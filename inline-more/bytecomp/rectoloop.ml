@@ -43,6 +43,35 @@
 
    * Detect function invariants
 
+   PROBLEM: because we are too aggressive, we try to transform
+   recursive functions that won't benefit from it. As a consequence,
+   we increase the size of these functions, and non-tailcall recursive
+   calls might lead to a stack overflow where it was not possible
+   before. WE MUST FIX THIS NOW.
+
+   An example in ctype.ml:
+Recursive definition:
+        unify_row_field_2290 (self-tail)(mut-rec)
+                callees: unify_2282
+        unify_row_2289 (mut-rec)
+        unify_pairs_2288
+        unify_kind_2287 (exported)(mut-rec)
+        unify_fields_2286 (mut-rec)
+        unify_list_2285 (mut-rec)
+        unify3_2284 (mut-tail)(mut-rec)
+                callers: unify2_2283
+        unify2_2283 (mut-rec)
+                callees: unify3_2284
+        unify_2282 (mut-tail)(exported)(mut-rec)
+                callers: unify_row_field_2290
+
+   We can only win something if we manage to remove some functions:
+   - we can totally remove functions that are not used
+   - if a function is mut-rec or self-rec, don't rec2loop it ?
+   - if a function is not self-tail, don't rec2loop it ?
+
+
+
    NOTES: * Currently, the transformation does not provide any
    speed-up. It is mostly because interesting optimisations are not
    performed. For example, the closure is still created, so some
@@ -50,6 +79,12 @@
    the closure is not useful anymore. For List.iter, the function is
    inlined, but it cannot benefit from inlining as functional
    arguments are not inlined.
+
+   Other possible optimisations:
+   - force coerce, to remove use positions for values that are
+     actually not exported.
+   - inline functions that are not exported and used only once.
+
 *)
 
 open Asttypes (* for Mutable *)
@@ -68,12 +103,14 @@ type fun_def = {
   fun_args : Ident.t list;
   fun_approx_args : (Ident.t, unit) Tbl.t array;
   fun_nargs : int;
-  mutable fun_rec : bool;
+  mutable fun_self_rec : bool;
+  mutable fun_mut_rec : bool;
   mutable fun_self : bool;
   mutable fun_orig_body : lambda;
   mutable fun_callers : (Ident.t, fun_def) Tbl.t;
   mutable fun_callees : (Ident.t, fun_def) Tbl.t;
   mutable fun_escapes : bool;
+  mutable fun_exported : bool;
 
   mutable fun_final_args : Ident.t list;
   mutable fun_final_body : lambda;
@@ -300,6 +337,7 @@ let rec2loop env fun_def =
 	    g.g_callees <- Tbl.add h_id h g.g_callees;
 	  end
 	) f.g_callees;
+	g.g_callees <- Tbl.remove f_id g.g_callees;
     ) !graph;
     if old_graph != !graph then
       iter ()
@@ -390,10 +428,16 @@ let rec elim_tailcall env lam =
     | Llet (str, id, lam, body) ->
       Llet (str, id, elim_tailcall_none env lam, elim_tailcall env body)
     | Lletrec (defs, body) ->
-      begin try
-	      match defs with
-		  _ :: _ :: _ -> raise Exit (* TODO: mutually recursive functions *)
-		| _ ->
+      begin
+	let module M = struct
+	  exception NoRec2Loop    (* exception raised before starting rec2loop *)
+	  exception AbortRec2Loop (* exception raised after starting rec2loop *)
+	end in
+	try
+	      if !Clflags.debug then raise M.NoRec2Loop; (* do not optimize when -g is set *)
+(*	      match defs with
+	      _ :: _ :: _ -> raise M.NoRec2Loop (* TODO: mutually recursive functions *)
+		| _ -> *)
 	      let (bv_all, bv_def, fun_defs) =
 		List.fold_left (fun (bv_all, bv_def, fun_defs) recdef ->
 		  match recdef with
@@ -410,8 +454,10 @@ let rec elim_tailcall env lam =
 			  fun_escapes = false;
 			  fun_callers = Tbl.empty;
 			  fun_callees = Tbl.empty;
-			  fun_rec = false;
+			  fun_mut_rec = false;
+			  fun_self_rec = false;
 			  fun_final_args = fun_args;
+			  fun_exported = false;
 			} in
 			let bv_all = Tbl.add fun_id fun_def bv_all in
 			let bv_def = Tbl.add fun_id fun_def bv_def in
@@ -422,7 +468,7 @@ let rec elim_tailcall env lam =
 		       don't know yet how to compile it.
 		       TODO: uncurried functions
 		    *)
-		      raise Exit
+		      raise M.NoRec2Loop
 		) (env.env_bv, Tbl.empty, []) defs in
 
 	      (* Check if the functions escape within other functions' bodies inside
@@ -436,7 +482,12 @@ let rec elim_tailcall env lam =
 		let def_env = { def_env with
 		  env_fun = fun_def;
 		} in
+		let fun_mut_escapes = fun_def.fun_escapes in
+		fun_def.fun_escapes <- false;
 		fun_def.fun_orig_body <- elim_tailcall def_env fun_def.fun_orig_body;
+		if fun_def.fun_escapes then
+		  fun_def.fun_self_rec <- fun_def.fun_escapes;
+		fun_def.fun_escapes <- fun_mut_escapes
 	      ) fun_defs;
 
 	      (* Force escaping functions to have a recursive
@@ -444,21 +495,33 @@ let rec elim_tailcall env lam =
 		 (currently), but they might still benefit from loop
 		 transformation for other optimizations. *)
 	      List.iter (fun fun_def ->
-		if fun_def.fun_escapes then fun_def.fun_rec <- true
+		if fun_def.fun_escapes then begin
+		  fun_def.fun_mut_rec <- true;
+		  fun_def.fun_escapes <- false
+		end;
 	      ) fun_defs;
 
 	      let body_env = {
 		env with env_bv = bv_all;
 	      } in
 	      let body' = elim_tailcall body_env body in
+	      List.iter (fun fun_def ->
+		if fun_def.fun_escapes then
+		  fun_def.fun_exported <- true
+		else
+		  fun_def.fun_escapes <- fun_def.fun_mut_rec || fun_def.fun_self_rec
+	      ) fun_defs;
 
 	      if !debug_rec2loop then begin
 	      Format.fprintf ppf "Recursive definition:\n";
 	      List.iter (fun fun_def ->
-		Format.fprintf ppf "\t%s %s%s%s\n" (Ident.unique_name fun_def.fun_id)
-		  (if fun_def.fun_escapes then "escapes" else "internal")
-		  (if fun_def.fun_rec then "(recursive)" else "")
-		  (if fun_def.fun_self then "(self)" else "");
+		Format.fprintf ppf "\t%s %s%s%s%s%s\n" (Ident.unique_name fun_def.fun_id)
+		  (if fun_def.fun_self then "(self-tail)" else "")
+		  (if fun_def.fun_callers <> Tbl.empty then "(mut-tail)" else "")
+		  (if fun_def.fun_exported then "(exported)" else "")
+		  (if fun_def.fun_self_rec then "(self-rec)" else "")
+		  (if fun_def.fun_mut_rec then "(mut-rec)" else "")
+		;
 		if fun_def.fun_callers <> Tbl.empty then begin
 		  Format.fprintf ppf "\t\tcallers: ";
 		  Tbl.iter (fun caller_id _ ->
@@ -477,15 +540,22 @@ let rec elim_tailcall env lam =
 	      Format.fprintf ppf "%!";
 	      end;
 
-	      let success = ref true in
+	      try
+	      if List.exists (fun fun_def ->
+		fun_def.fun_mut_rec || fun_def.fun_self_rec) fun_defs then
+		raise M.AbortRec2Loop;
+
+
+(*	      let success = ref 0 in *)
 	      List.iter (fun fun_def ->
 		try
-		  rec2loop def_env fun_def
-		with Exit -> success := false
+		  if fun_def.fun_escapes then
+		    rec2loop def_env fun_def
+		with Exit -> raise M.AbortRec2Loop
 	      ) fun_defs;
 
-		if !success then
-		  (* Put non-recursive functions that escape inside normal lets, within the body *)
+
+		  (* In case of success, we just have to output escaping functions *)
 		  let body'' =
 		    List.fold_left (fun body fun_def ->
 		      if fun_def.fun_escapes then
@@ -495,12 +565,13 @@ let rec elim_tailcall env lam =
 		      else
 			body
 		    ) body' fun_defs  in
-		  (* If there are recursive functions, then define them within one single
+
+(*		  (* If there are recursive functions, then define them within one single
 		     recursive let, outside of the body so that they are available from
 		     within other function definitions. *)
 		  let defs' =
 		    List.fold_left (fun defs fun_def ->
-		      if fun_def.fun_rec then
+		      if fun_def.fun_mut_rec || fun_def.fun_self_rec then
 			(fun_def.fun_id,
 			 Lfunction(Curried, fun_def.fun_final_args, fun_def.fun_final_body))
 			:: defs
@@ -509,14 +580,15 @@ let rec elim_tailcall env lam =
 		     ) [] fun_defs
 		  in
 		  if defs' = [] then body'' else
-		    Lletrec (defs', body'')
-		else
+		    Lletrec (defs', body'') *)
+		  body''
+	      with M.AbortRec2Loop ->
 		  let defs' = List.map (fun fun_def ->
 		    (fun_def.fun_id, Lfunction(Curried, fun_def.fun_args, fun_def.fun_orig_body))
 		  ) fun_defs in
 		  Lletrec (defs', body')
 
-	with Exit ->
+	with M.NoRec2Loop ->
 	  Lletrec (List.map (fun (id, lam) ->
 	    (id, elim_tailcall_none env lam)) defs, elim_tailcall env body)
       end
@@ -563,9 +635,11 @@ let simplify lam =
     fun_callers = Tbl.empty;
     fun_callees = Tbl.empty;
     fun_escapes = true;
-    fun_rec = false;
+    fun_mut_rec = false;
+    fun_self_rec = false;
     fun_self = false;
     fun_final_args = [];
+    fun_exported = false;
   } in
 
   if !debug_rec2loop then begin
@@ -574,12 +648,12 @@ let simplify lam =
   end;
 
   let lam =
-  elim_tailcall_none {
-    env_fun = fun_def;
-    env_bv = Tbl.empty;
-    env_defs = Tbl.empty;
-  }
-    lam
+    elim_tailcall_none {
+      env_fun = fun_def;
+      env_bv = Tbl.empty;
+      env_defs = Tbl.empty;
+    }
+      lam
   in
 
   if !debug_rec2loop then begin

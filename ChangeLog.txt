@@ -1,3 +1,14 @@
+2011/04/29:
+ * Only perform rec2loop for functions that are escaping outside the
+   recursion, but not within the recursion, to prevent stack overflows.
+ * In case of success, generate code only for escaping functions.
+ * Improved test_all.ml script with more options
+
+2011/04/27:
+ * Added the beginning of a simple testsuite in simple-tests/, to run using test_all.ml as a script
+ * Fixed a problem where rec2loop would abort because a callee was merged but not removed.
+ * Disabled rec2loop when -g is set
+
 2011/04/26:
  * Implemented transformation of tailcall-recursive functions into loops at the lambda-code level
    * Debugged the simple case of one recursive functions

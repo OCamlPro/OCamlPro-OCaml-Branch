@@ -356,8 +356,10 @@ let simplify_lets lam =
       let slinit = simplif linit in
       let slbody = simplif lbody in
       begin try
+(*	      Format.fprintf Format.err_formatter "try eliminate_ref %s@." (Ident.unique_name v);*)
         Llet(Variable, v, slinit, eliminate_ref v slbody)
       with Real_reference ->
+(*	Format.fprintf Format.err_formatter "try eliminate_ref %s failed@." (Ident.unique_name v); *)
         Llet(Strict, v, Lprim(Pmakeblock(0, Mutable), [slinit]), slbody)
       end
   | Llet(Alias, v, l1, l2) ->
@@ -411,7 +413,8 @@ let simplify_lets lam =
 
 let simplify_lambda lam =
   simplify_lets
-    (Rectoloop.simplify
        (* Must be done after simplify_exits, because simplify_exits assumes
 	  exits always appear in tailcall !!! *)
-       (simplify_exits  lam))
+       (Rectoloop.simplify
+    (simplify_exits
+	  lam))
