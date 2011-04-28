@@ -367,7 +367,7 @@ let simplify_lets lam =
 		  Lfunction(Curried, args, body) when List.length args = List.length ll ->
 (*		    Printf.fprintf stderr "Simplif: inlining temporary function %s\n%!" (Ident.unique_name v); *)
 		    List.fold_left2 (fun body v arg ->
-		      Llet(Strict, v, arg, body))
+		      Llet(Strict, v, simplif arg, body))
 		      body args ll
 		| _ ->
 		  Lapply(lfun, List.map simplif ll, loc)
