@@ -38,9 +38,6 @@
    * Don't allow big functions to be duplicated, it would lead to huge
    duplication of code.
 
-   * Prevent duplication of bound variables inside mutually recursive
-   functions
-
    * Detect function invariants
 
    CHECK: Is-it possible that a call that was previously tailcall becomes
@@ -68,6 +65,8 @@ open Asttypes (* for Mutable *)
 open Lambda
 let ppf = Format.err_formatter
 
+module IntSet = Set.Make(struct type t = int let compare = compare end)
+
 let debug_rec2loop = ref false
 let _ =
   Clflags.add_debug_flag "rec2loop" [ debug_rec2loop ]
@@ -75,22 +74,27 @@ let _ =
 let const_true = Lconst (Const_pointer 1)
 let const_false = Lconst (Const_pointer 0)
 
-type fun_def = {
-  fun_id : Ident.t;
-  fun_args : Ident.t list;
-  fun_approx_args : (Ident.t, unit) Tbl.t array;
-  fun_nargs : int;
-  mutable fun_self_rec : bool;
-  mutable fun_mut_rec : bool;
-  mutable fun_self : bool;
-  mutable fun_orig_body : lambda;
-  mutable fun_callers : (Ident.t, fun_def) Tbl.t;
-  mutable fun_callees : (Ident.t, fun_def) Tbl.t;
-  mutable fun_escapes : bool;
-  mutable fun_exported : bool;
+type arg_invariance =
+    ArgInvariant of Ident.t
+  | ArgVariant of Ident.t * Ident.t * Ident.t * Ident.t
 
-  mutable fun_final_args : Ident.t list;
-  mutable fun_final_body : lambda;
+type fun_def = {
+  fun_id : Ident.t;        (* name of the function *)
+  fun_args : Ident.t list; (* names of arguments *)
+  mutable fun_approx_args : Ident.t option list array; (* approximation of arguments at call sites *)
+  fun_nargs : int;         (* number of arguments *)
+  mutable fun_self_rec : bool;  (* is the function self non-tail recursive  (called from itself) *)
+  mutable fun_mut_rec : bool;   (* is the function mutually non-tail recursive (called from other functions *)
+  mutable fun_self : bool;      (* is the function self tail recursive *)
+  mutable fun_orig_body : lambda; (* non modified body of the function, after tailcall elimination for inner lets *)
+  mutable fun_callers : (Ident.t, fun_def) Tbl.t; (* tailcall callers of the function, except from itself *)
+  mutable fun_callees : (Ident.t, fun_def) Tbl.t; (* tailcall calls of the function, except to itself *)
+  mutable fun_escapes : bool;  (* does the function closure escape ? *)
+  mutable fun_exported : bool; (* is the function used outside of the definition *)
+  mutable fun_exttail : (Ident.t * int, unit) Tbl.t; (* tailcalls to other named functions, with arity *)
+
+  mutable fun_final_args : Ident.t list; (* final names of the arguments *)
+  mutable fun_final_body : lambda; (* modified body of the function, after tailcall elimination of the definition *)
 }
 
 type env = {
@@ -102,7 +106,7 @@ type env = {
 type graph_node = {
   g_id : Ident.t;
   g_fun : fun_def;
-  g_args : (Ident.t * Ident.t * Ident.t * Ident.t) list;
+  g_args : arg_invariance list;
 
   mutable g_callers : (Ident.t, graph_node) Tbl.t;
   mutable g_callees : (Ident.t, graph_node) Tbl.t;
@@ -117,13 +121,22 @@ and node_body =
 
 type trs = {
   trs_return : int;
-  trs_calls : (Ident.t, int * int) Tbl.t;
+  mutable trs_calls : (Ident.t * int, int * bool list * bool ref) Tbl.t;
+  mutable trs_extcalls : (Ident.t, IntSet.t ref) Tbl.t;
 }
 
 let const_unit = Lconst (Const_pointer 0)
 let const_true = Lconst (Const_pointer 1)
 
+let remove_bv id trs =
+  try
+    let set = Tbl.find id trs.trs_extcalls in
+    IntSet.iter (fun nargs ->
+      trs.trs_calls <- Tbl.remove (id, nargs) trs.trs_calls
+    ) !set
+  with Not_found -> ()
 
+(* Replace tailcalls by static raises *)
 let rec substitute_tailcall trs lam =
   match lam with
     | Lvar id -> lam
@@ -137,17 +150,22 @@ let rec substitute_tailcall trs lam =
     | Lassign (id, lam) -> lam
     | Lapply (Lvar fun_id, args, loc) ->
       begin try
-	      let (nargs, call_f) = Tbl.find fun_id trs.trs_calls in
-	      if nargs <> List.length args then begin
-		assert false;
-		raise Not_found;
-	      end;
-	      Lstaticraise (call_f, args)
+	  if !debug_rec2loop then begin
+	    Format.fprintf ppf "Tailcall %s(%d)@." (Ident.unique_name fun_id) (List.length args);
+	  end;
+	  let nargs = List.length args in
+	  let (call_f, bitmap_args, used) = Tbl.find (fun_id, nargs) trs.trs_calls in
+	  used := true;
+	  if bitmap_args = [] then
+	    Lstaticraise (call_f, args)
+	  else
+	    Lstaticraise (call_f, List.fold_left2 (fun args arg is_present ->
+	      if is_present then arg :: args else args) [] args bitmap_args)
 	with Not_found ->
 	  if !debug_rec2loop then begin
 	    Format.fprintf ppf "%s not found@." (Ident.unique_name fun_id);
-	    Tbl.iter (fun id _ ->
-	      Format.fprintf ppf "\t%s@." (Ident.unique_name id)
+	    Tbl.iter (fun (id, nargs) _ ->
+	      Format.fprintf ppf "\t%s(%d)@." (Ident.unique_name id) nargs
 	    ) trs.trs_calls;
 	  end;
 	  lam
@@ -156,8 +174,14 @@ let rec substitute_tailcall trs lam =
     | Lapply (funct, args, loc) -> lam
     | Lsend (kind, met, obj, args) -> lam
     | Llet (str, id, id_lam, body) ->
+      let trs = { trs with trs_calls = trs.trs_calls } in
+      remove_bv id trs;
       Llet (str, id, id_lam, substitute_tailcall trs body)
     | Lletrec (defs, body) ->
+      let trs = { trs with trs_calls = trs.trs_calls } in
+      List.iter (fun (id, _) ->
+	remove_bv id trs
+      ) defs;
       Lletrec(defs, substitute_tailcall trs body)
     | Lswitch(arg, sw) ->
       Lswitch (arg,
@@ -183,54 +207,91 @@ and substitute_tailcall_actions f actions =
     | (num, lam) :: actions ->
       (num, f lam) :: substitute_tailcall_actions f actions
 
+let bitmap_args g =
+  List.map (fun arg ->
+    match arg with
+	ArgVariant _ -> true
+      | ArgInvariant _ -> false) g.g_args
+
 let rec finition trs g =
   let restart_num = next_raise_count () in
+
   let trs = {
     trs with
-      trs_calls = Tbl.add g.g_id (List.length g.g_args, restart_num) trs.trs_calls
+      trs_calls = Tbl.add (g.g_id, List.length g.g_args) (restart_num,
+							  bitmap_args g
+							  , ref false) trs.trs_calls
   } in
+
+  (* By default, tailcalls outside the definition are turned into
+     catch-exit, otherwise, they would not be tailcall anymore. However,
+     we cannot do that for any value defined in the body of the function,
+     including the arguments... *)
+  List.iter (fun arg ->
+    match arg with
+	ArgVariant (call_arg, ref_arg, catch_arg, in_arg) -> remove_bv in_arg trs;
+      | ArgInvariant in_arg -> remove_bv in_arg trs;
+  ) g.g_args;
+
   let loop =
     Lwhile(const_true,
 	   Lstaticcatch(
 	     (let body = with_body trs g.g_body in
-	      List.fold_left (fun body (call_arg, ref_arg, catch_arg, in_arg) ->
-		Llet(Strict, in_arg, Lprim(Pfield 0, [Lvar ref_arg]), body)
-		 (* We cannot use the following because we are before eliminate_ref.
-		Llet(Strict, in_arg, Lvar ref_arg, body) *)
+	      List.fold_left (fun body arg ->
+		match arg with
+		    ArgInvariant _ -> body
+		  | ArgVariant (call_arg, ref_arg, catch_arg, in_arg) ->
+		    Llet(Strict, in_arg, Lprim(Pfield 0, [Lvar ref_arg]), body)
+	      (* We cannot use the following because we are before eliminate_ref.
+		 Llet(Strict, in_arg, Lvar ref_arg, body) *)
 	      )
 		body
 		g.g_args)
 	       ,
-	     (restart_num, List.map (fun (_,_,catch_arg,_) -> catch_arg) g.g_args),
-	     List.fold_left (fun catch (call_arg, ref_arg, catch_arg, in_arg) ->
-	       Lsequence(
-		 Lprim(Psetfield(0, true), [Lvar ref_arg; Lvar catch_arg]),
+	     (restart_num, List.fold_left (fun list arg ->
+	       match arg with
+		   ArgInvariant _ -> list
+		 | ArgVariant (_,_,catch_arg,_) -> catch_arg :: list) [] g.g_args),
+	     List.fold_left (fun catch arg ->
+	       match arg with
+		   ArgInvariant _ -> catch
+		 | ArgVariant (call_arg, ref_arg, catch_arg, in_arg) ->
+		   Lsequence(
+		     Lprim(Psetfield(0, true), [Lvar ref_arg; Lvar catch_arg]),
 		 (* We cannot use the following because we are before eliminate_ref.
 		    Lassign (ref_arg, Lvar catch_arg), *)
-		 catch)
+		     catch)
 	     )
 	       const_unit
 	       g.g_args
 	   )
     ) in
-  List.fold_left (fun loop (call_arg, ref_arg, catch_arg, in_arg) ->
-		  (* We cannot use the following because we are before eliminate_ref.
-		     Llet(Variable, ref_arg, Lvar call_arg, loop) *)
+  List.fold_left (fun loop arg ->
+    match arg with
+	ArgInvariant _ -> loop
+      | ArgVariant (call_arg, ref_arg, catch_arg, in_arg) ->
+    (* We cannot use the following because we are before eliminate_ref.
+       Llet(Variable, ref_arg, Lvar call_arg, loop) *)
     Llet(Strict, ref_arg, Lprim(Pmakeblock(0, Mutable), [Lvar call_arg]), loop)
   ) loop g.g_args
 
 and with_body trs body =
   match body with
       BODY fun_def ->
-	Lstaticraise(trs.trs_return, [substitute_tailcall trs fun_def.fun_orig_body])
+	Lstaticraise(trs.trs_return, [
+	  substitute_tailcall trs fun_def.fun_orig_body
+	])
     | CATCH_WITH (body, f) ->
       let call_f = next_raise_count () in
       let trs_body = { trs with
-	trs_calls = Tbl.add f.g_id (List.length f.g_args, call_f) trs.trs_calls;
+	trs_calls = Tbl.add (f.g_id, List.length f.g_args) (call_f, bitmap_args f, ref false) trs.trs_calls;
       } in
       Lstaticcatch(
 	with_body trs_body body,
-	(call_f, List.map (fun (call_arg, _,_,_) -> call_arg) f.g_args),
+	(call_f, List.fold_left (fun list arg ->
+	  match arg with
+	      ArgInvariant _ -> list
+	    | ArgVariant (call_arg, _,_,_) -> call_arg :: list) [] f.g_args),
 	finition trs f)
 
 
@@ -247,12 +308,13 @@ let rec print_body indent body =
     | CATCH_WITH (body, catch) ->
       Format.fprintf ppf "%sTRY(%s)\n"  indent (Ident.unique_name catch.g_id);
       print_body (indent ^ "\t") body;
-      Format.fprintf ppf "%sCATCH(%s)\n"  indent (Ident.unique_name catch.g_id);
+      Format.fprintf ppf "%sCATCH(%s[%d])\n"  indent (Ident.unique_name catch.g_id) (List.length catch.g_args);
       print_body (indent ^ "\t") catch.g_body
 
 let print_graph graph =
   Tbl.iter (fun _ g ->
-    Format.fprintf ppf "\t%s\n" (Ident.unique_name g.g_id);
+    Format.fprintf ppf "=================================================\n";
+    Format.fprintf ppf "\t%s [%d args]\n" (Ident.unique_name g.g_id) (List.length g.g_args);
     print_body "\t" g.g_body;
     Format.fprintf ppf "\t\tcallers: ";
     Tbl.iter (fun caller_id _ ->
@@ -264,22 +326,51 @@ let print_graph graph =
       Format.fprintf ppf "%s " (Ident.unique_name caller_id)
     ) g.g_callees;
     Format.fprintf ppf "\n";
+    Format.fprintf ppf "=================================================\n";
   ) graph
+
+
+
+(* call graph transformation *)
 
 let rec2loop env fun_def =
   let fun_id = fun_def.fun_id in
   if !debug_rec2loop then begin
-    Format.fprintf ppf "rec2loop %s\n"  (Ident.unique_name fun_id);
+    Format.fprintf ppf "rec2loop %s...\n"  (Ident.unique_name fun_id);
   end;
+
   let graph = Tbl.map (fun fun_id fun_def ->
+  let g_args =
+    List.mapi (fun i arg ->
+	let arg_name = Ident.name arg in
+	if !debug_rec2loop then begin
+	  Format.fprintf ppf "Approx for arg %d ( %s ):\n%!" i (Ident.unique_name arg);
+	  List.iter (fun approx ->
+	    match approx with
+		None ->
+		  Format.fprintf ppf "\tCan be anything !!!\n%!"
+	      | Some id ->
+		Format.fprintf ppf "\tCan be %s\n%!" (Ident.unique_name id)
+	  ) fun_def.fun_approx_args.(i);
+	end;
+	match fun_def.fun_approx_args.(i) with
+	    (* Note: this can only happen for a mutually tailcall
+	       recursive function, as otherwise, other calls would
+	       generate other approximations. TODO: extend this for
+	       mutually recursive functions. *)
+	    [ Some id ] when id = arg -> ArgInvariant arg
+	  | _ -> ArgVariant (
+	    Ident.create arg_name, (* call_arg *)
+	    Ident.create arg_name, (* ref_arg *)
+	    Ident.create arg_name, (* catch_arg *)
+	    arg
+	  )
+    ) fun_def.fun_args
+  in
+
     {
       g_id = fun_id;
-      g_args = List.map (fun arg ->
-	let arg_name = Ident.name arg in
-	Ident.create arg_name, (* call_arg *)
-	Ident.create arg_name, (* ref_arg *)
-	Ident.create arg_name, (* catch_arg *)
-	arg) fun_def.fun_args; (* in_arg *)
+      g_args = g_args;
       g_fun = fun_def;
       g_body = BODY fun_def;
       g_callers = Tbl.empty;
@@ -343,10 +434,38 @@ let rec2loop env fun_def =
   let trs = {
     trs_return = return_num;
     trs_calls = Tbl.empty;
+    trs_extcalls = Tbl.empty;
   } in
+  Tbl.iter (fun _ fun_def ->
+    Tbl.iter (fun (fun_id, nargs) _ ->
+      try
+	let set = Tbl.find fun_id trs.trs_extcalls in
+	if not (IntSet.mem nargs !set) then begin
+	  set := IntSet.add nargs !set;
+	  trs.trs_calls <- Tbl.add (fun_id, nargs) (next_raise_count (), [], ref false) trs.trs_calls
+	end
+      with Not_found ->
+	trs.trs_extcalls <- Tbl.add fun_id (ref (IntSet.add nargs IntSet.empty)) trs.trs_extcalls;
+	trs.trs_calls <- Tbl.add (fun_id, nargs) (next_raise_count (), [], ref false) trs.trs_calls
+    ) fun_def.fun_exttail
+  ) env.env_defs;
+
+  let lam = finition trs g in
+
+  let lam = Tbl.fold (fun (fun_id, nargs) (call_num, extern, used) lam ->
+    assert (extern = [] || !used);
+    if extern = []  && !used then begin
+      if !debug_rec2loop then
+	Format.fprintf ppf "Transformed external tailcall to %s\n" (Ident.unique_name fun_id);
+      let args = Array.to_list (Array.init nargs (fun i -> Ident.create (Printf.sprintf "arg%d" (i+1)))) in
+      Lstaticcatch(lam, (call_num, args),
+		   Lapply (Lvar fun_id, List.map (fun arg -> Lvar arg) args, Location.none))
+
+    end else lam
+  ) trs.trs_calls lam in
+
   let lam =
-    Lstaticcatch(finition trs g,
-		 (return_num, [result_id]), Lvar result_id)
+    Lstaticcatch(lam, (return_num, [result_id]), Lvar result_id)
   in
 
   if !debug_rec2loop then begin
@@ -359,7 +478,100 @@ let rec2loop env fun_def =
   end;
 
   fun_def.fun_final_body <- lam;
-  fun_def.fun_final_args <- List.map (fun (call_arg, _, _, _) -> call_arg) g.g_args
+  fun_def.fun_final_args <- List.map (fun arg ->
+    match arg with
+	ArgInvariant arg -> arg
+      | ArgVariant (call_arg, _,_,_) -> call_arg) g.g_args
+
+
+
+
+
+
+(* Substitute bound variables.
+
+   Since we are potentially duplicating code, we need to substitute bound variables
+  to avoid having the same ident bound at several locations in the lambda code.
+*)
+
+let rec substitute_bv bv lam =
+  match lam with
+    | Lvar id -> Lvar (substitute_bv_id bv id)
+    | Lconst cst -> lam
+    | Lprim (prim, args) -> Lprim (prim, List.map (substitute_bv bv) args)
+    | Lstaticraise (i, args) -> Lstaticraise (i, List.map (substitute_bv bv) args)
+    | Lwhile (cond, body) -> Lwhile (substitute_bv bv cond, substitute_bv bv body)
+    | Lifused (id, lam) -> Lifused (substitute_bv_id bv id, substitute_bv bv lam)
+    | Lassign (id, lam) -> Lassign (substitute_bv_id bv id, substitute_bv bv lam)
+    | Lapply (funct, args, loc) ->
+      Lapply (substitute_bv bv funct, List.map (substitute_bv bv) args, loc)
+    | Lsend (kind, met, obj, args) ->
+      Lsend (kind, substitute_bv bv met, substitute_bv bv obj, List.map (substitute_bv bv) args)
+    | Lswitch(arg, sw) ->
+      Lswitch (substitute_bv bv arg,
+	       { sw with
+		 sw_failaction = (match sw.sw_failaction with
+		     None -> None
+		   | Some lam -> Some (substitute_bv bv lam));
+		 sw_consts = substitute_bv_actions (substitute_bv bv) sw.sw_consts;
+		 sw_blocks = substitute_bv_actions (substitute_bv bv) sw.sw_blocks;
+	       })
+    | Lifthenelse (cond, ifso, ifnot) ->
+      Lifthenelse (substitute_bv bv cond, substitute_bv bv ifso, substitute_bv bv ifnot)
+    | Lsequence (l1, l2) -> Lsequence (substitute_bv bv l1, substitute_bv bv l2)
+    | Levent (lam, ev) -> Levent (substitute_bv bv lam, ev)
+
+(* binders *)
+    | Llet (str, id, id_lam, body) ->
+      let id' = Ident.create (Ident.name id) in
+      let bv' = Tbl.add id id' bv in
+      Llet (str, id', substitute_bv bv id_lam, substitute_bv bv' body)
+    | Lfor (id, lo, hi, dir, body) ->
+      let id' = Ident.create (Ident.name id) in
+      let bv' = Tbl.add id id' bv in
+      Lfor (id', substitute_bv bv lo, substitute_bv bv hi, dir, substitute_bv bv' body)
+    | Ltrywith (body, id, hdlr) ->
+      let id' = Ident.create (Ident.name id) in
+      let bv' = Tbl.add id id' bv in
+      Ltrywith (substitute_bv bv body, id', substitute_bv bv' hdlr)
+
+    | Lfunction (kind, params, body) ->
+      let params' = List.map (fun v -> Ident.create (Ident.name v)) params in
+      let bv' = List.fold_left2 (fun bv v v' ->
+	Tbl.add v v' bv
+      ) bv params params' in
+      Lfunction (kind, params', substitute_bv bv' body)
+    | Lstaticcatch (body, (i, params), hdlr) ->
+      let params' = List.map (fun v -> Ident.create (Ident.name v)) params in
+      let bv' = List.fold_left2 (fun bv v v' ->
+	Tbl.add v v' bv
+      ) bv params params' in
+      Lstaticcatch (substitute_bv bv body,
+		    (i, params'), substitute_bv bv' hdlr)
+
+    | Lletrec (defs, body) ->
+      let defs' = List.map (fun (id, id_def) ->
+	let id' = Ident.create (Ident.name id) in
+	(id, id', id_def)) defs in
+      let bv' = List.fold_left (fun bv (v, v', _) ->
+	Tbl.add v v' bv
+      ) bv defs' in
+      Lletrec(List.map (fun (id, id', id_def) ->
+	(id', substitute_bv bv' id_def)
+      ) defs', substitute_bv bv' body)
+
+and substitute_bv_actions f actions =
+  match actions with
+      [] -> []
+    | (num, lam) :: actions ->
+      (num, f lam) :: substitute_bv_actions f actions
+
+and substitute_bv_id bv id =
+      try
+	Tbl.find id bv
+      with Not_found -> id
+
+
 
 let rec elim_tailcall env lam =
   match lam with
@@ -374,8 +586,17 @@ let rec elim_tailcall env lam =
       Lifthenelse(elim_tailcall_none env c1, elim_tailcall env c2, const_false)
     | Lapply (Lvar fun_id, args, loc) ->
       let args = List.map (elim_tailcall_none env) args in
+      let caller = env.env_fun in
       begin try
-	      let callee = Tbl.find fun_id env.env_defs in
+	      let callee = try
+			     Tbl.find fun_id env.env_defs
+		with Not_found ->
+		if !debug_rec2loop then begin
+		  Format.fprintf ppf "%s called but not defined\n%!"
+		    (Ident.unique_name fun_id);
+		end;
+		  raise Not_found
+	      in
 	      if callee.fun_nargs <> List.length args then begin
 		if !debug_rec2loop then begin
 		  Format.fprintf ppf "%s partially applied recursively\n%!"
@@ -383,14 +604,26 @@ let rec elim_tailcall env lam =
 		end;
 		raise Not_found;
 	      end;
-	      let caller = env.env_fun in
 	      if caller != callee then begin
 		caller.fun_callees <- Tbl.add callee.fun_id callee caller.fun_callees;
 		callee.fun_callers <- Tbl.add caller.fun_id caller callee.fun_callers;
 	      end else
 		caller.fun_self <- true;
+	      let args_table = Array.of_list args in
+	      for i = 0 to callee.fun_nargs - 1 do
+		let arg = match args_table.(i) with
+		    Lvar id -> Some id
+		  | _ -> None in
+		let approx = callee.fun_approx_args.(i) in
+		match arg, approx with
+		    _, [None] -> ()
+		  | None, _ -> callee.fun_approx_args.(i) <- [None]
+		  | Some i, (Some j) :: _ when i = j -> ()
+		  | _ , _ -> callee.fun_approx_args.(i) <- arg :: approx
+	      done;
 	      Lapply (Lvar fun_id, args, loc)
 	with Not_found ->
+	  caller.fun_exttail <- Tbl.add (fun_id, List.length args) () caller.fun_exttail;
 	  maybe_escapes env fun_id;
 	  Lapply (Lvar fun_id, args, loc)
       end
@@ -425,7 +658,7 @@ let rec elim_tailcall env lam =
 			  fun_self = false;
 			  fun_args = fun_args;
 			  fun_nargs = nargs;
-			  fun_approx_args = Array.create nargs Tbl.empty;
+			  fun_approx_args = Array.create nargs [];
 			  fun_orig_body = fun_body;
 			  fun_final_body = fun_body;
 			  fun_escapes = false;
@@ -435,6 +668,7 @@ let rec elim_tailcall env lam =
 			  fun_self_rec = false;
 			  fun_final_args = fun_args;
 			  fun_exported = false;
+			  fun_exttail = Tbl.empty;
 			} in
 			let bv_all = Tbl.add fun_id fun_def bv_all in
 			let bv_def = Tbl.add fun_id fun_def bv_def in
@@ -492,12 +726,13 @@ let rec elim_tailcall env lam =
 	      if !debug_rec2loop then begin
 	      Format.fprintf ppf "Recursive definition:\n";
 	      List.iter (fun fun_def ->
-		Format.fprintf ppf "\t%s %s%s%s%s%s\n" (Ident.unique_name fun_def.fun_id)
+		Format.fprintf ppf "\t%s %s%s%s%s%s %d args\n" (Ident.unique_name fun_def.fun_id)
 		  (if fun_def.fun_self then "(self-tail)" else "")
 		  (if fun_def.fun_callers <> Tbl.empty then "(mut-tail)" else "")
 		  (if fun_def.fun_exported then "(exported)" else "")
 		  (if fun_def.fun_self_rec then "(self-rec)" else "")
 		  (if fun_def.fun_mut_rec then "(mut-rec)" else "")
+		  fun_def.fun_nargs
 		;
 		if fun_def.fun_callers <> Tbl.empty then begin
 		  Format.fprintf ppf "\t\tcallers: ";
@@ -523,11 +758,13 @@ let rec elim_tailcall env lam =
 		raise M.AbortRec2Loop;
 
 
-(*	      let success = ref 0 in *)
+	      let nsuccess = ref 0 in
 	      List.iter (fun fun_def ->
 		try
-		  if fun_def.fun_escapes then
-		    rec2loop def_env fun_def
+		  if fun_def.fun_escapes then begin
+		    rec2loop def_env fun_def;
+		    incr nsuccess
+		  end
 		with Exit -> raise M.AbortRec2Loop
 	      ) fun_defs;
 
@@ -536,16 +773,28 @@ let rec elim_tailcall env lam =
 		  let body'' =
 		    List.fold_left (fun body fun_def ->
 		      if fun_def.fun_escapes then
-			Llet(Strict, fun_def.fun_id,
-			     Lfunction(Curried, fun_def.fun_final_args, fun_def.fun_final_body),
-			     body)
+			let lfun =
+			  Lfunction(Curried, fun_def.fun_final_args, fun_def.fun_final_body) in
+
+			(* If several escaping functions were
+			   transformed in the same definition, we are
+			   probably duplicating code. Consequently, we
+			   need to substitute bound variables into all
+			   but one transformed functions to avoid
+			   having non-uniq identifiers. *)
+			let lfun = if !nsuccess > 1 then begin
+			  decr nsuccess;
+			  substitute_bv Tbl.empty lfun
+			end else lfun
+			in
+			Llet(Strict, fun_def.fun_id, lfun, body)
 		      else
 			body
 		    ) body' fun_defs  in
 
-(*		  (* If there are recursive functions, then define them within one single
-		     recursive let, outside of the body so that they are available from
-		     within other function definitions. *)
+		  (*		  (* If there are recursive functions, then define them within one single
+				  recursive let, outside of the body so that they are available from
+				  within other function definitions. *)
 		  let defs' =
 		    List.fold_left (fun defs fun_def ->
 		      if fun_def.fun_mut_rec || fun_def.fun_self_rec then
@@ -599,7 +848,10 @@ and elim_tailcall_actions f actions =
     | (num, lam) :: actions ->
       (num, f lam) :: elim_tailcall_actions f actions
 
-and elim_tailcall_none env lam = elim_tailcall { env with env_defs = Tbl.empty } lam
+and elim_tailcall_none env lam =
+  elim_tailcall { env with
+    env_defs = Tbl.empty;
+  } lam
 
 let simplify lam =
   let fun_def = {
@@ -617,6 +869,7 @@ let simplify lam =
     fun_self = false;
     fun_final_args = [];
     fun_exported = false;
+    fun_exttail = Tbl.empty;
   } in
 
   if !debug_rec2loop then begin

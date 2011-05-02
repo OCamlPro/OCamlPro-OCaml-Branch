@@ -184,6 +184,12 @@ let primitive ppf = function
   | Pbigarrayset(unsafe, n, kind, layout) ->
       print_bigarray "set" unsafe kind ppf layout
 
+let string_of_kind str = match str with
+    Alias -> "(=)"
+  | Variable -> ":="
+  | Strict -> "="
+  | StrictOpt -> "=?"
+
 let rec lam ppf = function
   | Lvar id ->
       Ident.print ppf id
@@ -211,10 +217,10 @@ let rec lam ppf = function
   | Llet(str, id, arg, body) ->
       let rec letbody = function
         | Llet(str, id, arg, body) ->
-            fprintf ppf "@ @[<2>%a@ %a@]" Ident.print id lam arg;
+            fprintf ppf "@ @[<2>%a@ %s %a@]" Ident.print id (string_of_kind str) lam arg;
             letbody body
         | expr -> expr in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@ %a@]" Ident.print id lam arg;
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@ %s %a@]" Ident.print id (string_of_kind str) lam arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
   | Lletrec(id_arg_list, body) ->
@@ -223,7 +229,7 @@ let rec lam ppf = function
         List.iter
           (fun (id, l) ->
             if !spc then fprintf ppf "@ " else spc := true;
-            fprintf ppf "@[<2>%a@ %a@]" Ident.print id lam l)
+            fprintf ppf "@[<2>%a@ = %a@]" Ident.print id lam l)
           id_arg_list in
       fprintf ppf
         "@[<2>(letrec@ (@[<hv 1>%a@])@ %a)@]" bindings id_arg_list lam body

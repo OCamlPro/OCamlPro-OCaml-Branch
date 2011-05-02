@@ -1,5 +1,20 @@
+2011/05/01:
+ * Rec2loop: approximate arguments to get rid of invariant arguments
+   for self tailcall recursive functions
+ * Simplif: cascading of simplifications when inlining one-use functions
+ * Simplif: prevent inlining of non-total calls of one-use functions
+
+2011/04/30:
+ * Rec2loop: substitute bound variables to avoid duplicating
+    identifiers, when several functions have been successfullly
+    transformed in the same recursive definition
+ * Rec2loop: fix the case where a tailcall to an external function
+    would become non-tailcall because of the transformation (the
+    problem is still present for tailcalls to internal functions)
+
 2011/04/29:
- * Simplif: fixed a memory-leak by preventing inlining of alias variables under abstractions and loops
+ * Simplif: fixed a memory-leak by preventing inlining of alias variables
+   under abstractions and loops
  * Simplif: allow inlining of functions used only once
 
 2011/04/29:

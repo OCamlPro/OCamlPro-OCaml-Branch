@@ -258,53 +258,91 @@ let simplify_exits lam =
 
 (* Simplification of lets *)
 
+type var_usage_counter = {
+  mutable var_noccs : int;
+  mutable var_nargs : int;
+}
+
 let simplify_lets lam =
 
   (* First pass: count the occurrences of all identifiers *)
   let occ = Hashtbl.create 83 in
   let count_var v =
     try
-      !(Hashtbl.find occ v)
-    with Not_found -> 0
-  and incr_var bv v =
+      let use = Hashtbl.find occ v in
+      use
+    with Not_found -> { var_noccs = 0; var_nargs = 0 }
+
+  in
+  let incr_var bv v =
     try (* bv is the set of locally bound variables, i.e. variables that can be safely inlined *)
-      incr (Tbl.find v bv)
+      let use = Tbl.find v bv in
+      use.var_noccs <- use.var_noccs + 1;
     with Not_found ->
-      try (* if the variable is not in bv, it should not be inlined. Increase its use-count by much *)
-	let r = Hashtbl.find occ v in
-	r := !r + 10
+      try
+      (* if the variable is not in bv, it should not be inlined. Increase its use-count by much *)
+	let use = Hashtbl.find occ v in
+	use.var_noccs <- use.var_noccs + 10;
       with Not_found -> () (* only Llet bound variables have a use-count *)
   in
+
+  let incr_fun bv v nargs =
+(*    Printf.fprintf stderr "incr_fun %s -> %d\n%!" (Ident.unique_name v)  nargs; *)
+    try (* bv is the set of locally bound variables, i.e. variables that can be safely inlined *)
+      let use = Tbl.find v bv in
+      use.var_noccs <- use.var_noccs + 1;
+      use.var_nargs <- nargs
+    with Not_found ->
+      try
+      (* if the variable is not in bv, it should not be inlined. Increase its use-count by much *)
+	let use = Hashtbl.find occ v in
+	if use.var_nargs = (-1) then begin
+	  use.var_noccs <- use.var_noccs + 1;
+	  use.var_nargs <- nargs
+	end else begin
+	  use.var_nargs <- (-2);
+	  use.var_noccs <- use.var_noccs + 10;
+	end
+      with Not_found -> () (* only Llet bound variables have a use-count *)
+  in
+
   let new_var bv v = (* add a variable both to the global table (occ) and to the locally bound variables *)
-    let r = ref 0 in
-    Hashtbl.add occ v r;
-    Tbl.add v r bv
+    let use =  { var_noccs = 0; var_nargs = (-1) } in
+    Hashtbl.add occ v use;
+    Tbl.add v use bv
   in
 
   let rec count bv lam =
     match lam with
       | Lvar v -> incr_var bv v
       | Lconst cst -> ()
+      | Lapply(Lvar v, ll, _) ->
+	incr_fun bv v (List.length ll); List.iter (count bv) ll
       | Lapply(l1, ll, _) -> count bv l1; List.iter (count bv) ll
-      | Lfunction(kind, params, l) -> count Tbl.empty l (* empty locally-bound variables for abstractions *)
+      | Lfunction(kind, params, l) ->
+	let bv = List.fold_left (fun bv v ->
+	  new_var bv v) Tbl.empty params in
+	count bv l (* empty locally-bound variables for abstractions *)
       | Llet(str, v, Lvar w, l2) when not !Clflags.debug ->
       (* v will be replaced by w in l2, so each occurrence of v in l2
          increases w's refcount *)
 	begin
 	  try
-	    let r = Hashtbl.find occ w in
+	    let wc = Hashtbl.find occ w in
 	    let bv' = new_var bv v in
 	    count bv' l2;
 	    let vc = count_var v in
-	    r := !r + vc
+	    wc.var_noccs <- wc.var_noccs + vc.var_noccs;
+	    wc.var_nargs <- 0 (* TODO *)
 	  with Not_found -> (* w is not a Llet defined variable. Don't count bv *)
+(*	    Printf.fprintf stderr "Could not find aliased variable %s by %s\n%!" (Ident.unique_name w) (Ident.unique_name v); *)
 	    count bv l2
 	end
       | Llet(str, v, l1, l2) ->
 	let bv' = new_var bv v in
 	count bv' l2;
       (* If v is unused, l1 will be removed, so don't count its variables *)
-	if str = Strict || count_var v > 0 then count bv l1
+	if str = Strict || (count_var v).var_noccs > 0 then count bv l1
       | Lletrec(bindings, body) ->
 	List.iter (fun (v, l) -> count bv l) bindings;
 	count bv body
@@ -330,7 +368,7 @@ let simplify_lets lam =
       | Lsend(_, m, o, ll) -> List.iter (count bv) (m::o::ll)
       | Levent(l, _) -> count bv l
       | Lifused(v, l) ->
-	if count_var v > 0 then count bv l
+	if (count_var v).var_noccs > 0 then count bv l
 
   and count_default bv sw = match sw.sw_failaction with
     | None -> ()
@@ -365,10 +403,13 @@ let simplify_lets lam =
 	      let lfun = Hashtbl.find subst v in
 	      match lfun with
 		  Lfunction(Curried, args, body) when List.length args = List.length ll ->
-(*		    Printf.fprintf stderr "Simplif: inlining temporary function %s\n%!" (Ident.unique_name v); *)
-		    List.fold_left2 (fun body v arg ->
-		      Llet(Strict, v, simplif arg, body))
-		      body args ll
+		  (*		    Printf.fprintf stderr "Simplif: inlining temporary function %s\n%!" (Ident.unique_name v); *)
+		    let inlined_body =
+		      List.fold_left2 (fun body v arg ->
+			Llet(Strict, v, arg, body))
+			body args ll
+		    in
+		    simplif inlined_body
 		| _ ->
 		  Lapply(lfun, List.map simplif ll, loc)
 	with Not_found ->
@@ -377,6 +418,7 @@ let simplify_lets lam =
     | Lapply(l1, ll, loc) -> Lapply(simplif l1, List.map simplif ll, loc)
     | Lfunction(kind, params, l) -> Lfunction(kind, params, simplif l)
     | Llet(str, v, Lvar w, l2) when not !Clflags.debug ->
+(*      Printf.fprintf stderr "Subst variable aliasing %s by %s\n%!" (Ident.unique_name v) (Ident.unique_name w); *)
       Hashtbl.add subst v (simplif (Lvar w));
       simplif l2
     | Llet(Strict, v, Lprim(Pmakeblock(0, Mutable), [linit]), lbody)
@@ -390,23 +432,35 @@ let simplify_lets lam =
 	(*	Format.fprintf Format.err_formatter "try eliminate_ref %s failed@." (Ident.unique_name v); *)
           Llet(Strict, v, Lprim(Pmakeblock(0, Mutable), [slinit]), slbody)
       end
-    | Llet(Strict, v, ((Lfunction _) as lfun), body) ->
-      begin match count_var v with
-          0 -> simplif body
-	| 1 when not !Clflags.debug ->
-          Hashtbl.add subst v (simplif lfun); simplif body
+    | Llet(Strict, v, ((Lfunction (_, params,_)) as lfun), body) ->
+      let use = count_var v in
+
+(*      Printf.fprintf stderr "used of %s -> %d with %d args\n%!" (Ident.unique_name v)
+	use.var_noccs use.var_nargs    ; *)
+      begin match use.var_noccs with
+          0 ->
+(*	    Printf.fprintf stderr "Remove useless closure %s\n%!" (Ident.unique_name v); *)
+	    simplif body
+	| 1 when not !Clflags.debug && List.length params = use.var_nargs ->
+(*	  Printf.fprintf stderr "inline  %s\n%!" (Ident.unique_name v); *)
+          Hashtbl.add subst v lfun; simplif body
 	| n -> Llet(Strict, v, simplif lfun, simplif body)
       end
     | Llet(Alias, v, l1, l2) ->
-      begin match count_var v with
-          0 -> simplif l2
+      begin match (count_var v).var_noccs with
+          0 ->
+(*	    Printf.fprintf stderr "Remove useless Alias %s\n%!" (Ident.unique_name v); *)
+	    simplif l2
 	| 1 when not !Clflags.debug ->
+(*	  Printf.fprintf stderr "Subst alias %s\n%!" (Ident.unique_name v); *)
           Hashtbl.add subst v (simplif l1); simplif l2
 	| n -> Llet(Alias, v, simplif l1, simplif l2)
       end
     | Llet(StrictOpt, v, l1, l2) ->
-      begin match count_var v with
-          0 -> simplif l2
+      begin match (count_var v).var_noccs with
+          0 ->
+(*	    Printf.fprintf stderr "Remove useless StrictOpt %s\n%!" (Ident.unique_name v); *)
+	    simplif l2
 	| n -> Llet(Alias, v, simplif l1, simplif l2)
       end
     | Llet(kind, v, l1, l2) -> Llet(kind, v, simplif l1, simplif l2)
@@ -431,7 +485,7 @@ let simplify_lets lam =
     | Ltrywith(l1, v, l2) -> Ltrywith(simplif l1, v, simplif l2)
     | Lifthenelse(l1, l2, l3) -> Lifthenelse(simplif l1, simplif l2, simplif l3)
     | Lsequence(Lifused(v, l1), l2) ->
-      if count_var v > 0
+      if (count_var v).var_noccs > 0
       then Lsequence(simplif l1, simplif l2)
       else simplif l2
     | Lsequence(l1, l2) -> Lsequence(simplif l1, simplif l2)
@@ -442,7 +496,7 @@ let simplify_lets lam =
     | Lsend(k, m, o, ll) -> Lsend(k, simplif m, simplif o, List.map simplif ll)
     | Levent(l, ev) -> Levent(simplif l, ev)
     | Lifused(v, l) ->
-      if count_var v > 0 then simplif l else lambda_unit
+      if (count_var v).var_noccs > 0 then simplif l else lambda_unit
   in
   simplif lam
 
