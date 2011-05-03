@@ -58,6 +58,7 @@ OTHEROBJS=\
   $(TOPDIR)/bytecomp/translcore.cmo \
   $(TOPDIR)/bytecomp/translclass.cmo \
   $(TOPDIR)/bytecomp/translmod.cmo \
+  $(TOPDIR)/bytecomp/rectoloop.cmo \
   $(TOPDIR)/bytecomp/simplif.cmo \
   $(TOPDIR)/bytecomp/runtimedef.cmo \
   $(TOPDIR)/asmcomp/arch.cmo \
@@ -68,6 +69,7 @@ OTHEROBJS=\
   $(TOPDIR)/asmcomp/mach.cmo \
   $(TOPDIR)/asmcomp/proc.cmo \
   $(TOPDIR)/asmcomp/clambda.cmo \
+  $(TOPDIR)/asmcomp/printclambda.cmo \
   $(TOPDIR)/asmcomp/compilenv.cmo \
   $(TOPDIR)/asmcomp/closure.cmo \
   $(TOPDIR)/asmcomp/cmmgen.cmo \

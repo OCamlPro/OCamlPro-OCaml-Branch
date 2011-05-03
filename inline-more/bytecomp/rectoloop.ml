@@ -38,8 +38,6 @@
    * Don't allow big functions to be duplicated, it would lead to huge
    duplication of code.
 
-   * Detect function invariants
-
    CHECK: Is-it possible that a call that was previously tailcall becomes
    non-tailcall ? We should take care of that !
 
@@ -57,7 +55,6 @@
    Other possible optimisations:
    - force coerce, to remove use positions for values that are
    actually not exported.
-   - inline functions that are not exported and used only once.
 
 *)
 

@@ -402,7 +402,7 @@ let simplify_lets lam =
       begin try
 	      let lfun = Hashtbl.find subst v in
 	      match lfun with
-		  Lfunction(Curried, args, body) when List.length args = List.length ll ->
+		| Lfunction(Curried, args, body) when List.length args = List.length ll ->
 		  (*		    Printf.fprintf stderr "Simplif: inlining temporary function %s\n%!" (Ident.unique_name v); *)
 		    let inlined_body =
 		      List.fold_left2 (fun body v arg ->
@@ -410,6 +410,19 @@ let simplify_lets lam =
 			body args ll
 		    in
 		    simplif inlined_body
+		| Lfunction(Tupled, args, body) when 1 = List.length ll ->
+		    (*		    Printf.fprintf stderr "Simplif: inlining temporary function %s\n%!" (Ident.unique_name v); *)
+		  let v = Ident.create "tuple" in
+		  (* TODO: optimize the case where the argument is a direct tuple *)
+		  let args = List.mapi (fun i arg ->
+		    arg, Lprim(Pfield i, [Lvar v])
+		  ) args in
+		  let inlined_body =
+		      List.fold_left (fun body (v, arg) ->
+			Llet(Strict, v, arg, body))
+			body args
+		    in
+		    Llet(Strict, v, simplif (List.hd ll), simplif inlined_body)
 		| _ ->
 		  Lapply(lfun, List.map simplif ll, loc)
 	with Not_found ->
@@ -432,7 +445,7 @@ let simplify_lets lam =
 	(*	Format.fprintf Format.err_formatter "try eliminate_ref %s failed@." (Ident.unique_name v); *)
           Llet(Strict, v, Lprim(Pmakeblock(0, Mutable), [slinit]), slbody)
       end
-    | Llet(Strict, v, ((Lfunction (_, params,_)) as lfun), body) ->
+    | Llet(Strict, v, ((Lfunction (kind, params,_)) as lfun), body) ->
       let use = count_var v in
 
 (*      Printf.fprintf stderr "used of %s -> %d with %d args\n%!" (Ident.unique_name v)
@@ -441,7 +454,13 @@ let simplify_lets lam =
           0 ->
 (*	    Printf.fprintf stderr "Remove useless closure %s\n%!" (Ident.unique_name v); *)
 	    simplif body
-	| 1 when not !Clflags.debug && List.length params = use.var_nargs ->
+	| 1 when not !Clflags.debug &&
+	    (
+	      (kind = Curried && List.length params = use.var_nargs)
+	      ||
+		(kind = Tupled && 1 = use.var_nargs)
+	    )
+	    ->
 (*	  Printf.fprintf stderr "inline  %s\n%!" (Ident.unique_name v); *)
           Hashtbl.add subst v lfun; simplif body
 	| n -> Llet(Strict, v, simplif lfun, simplif body)

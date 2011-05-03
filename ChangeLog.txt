@@ -1,3 +1,10 @@
+2011/05/03:
+ * Matching: applied inplace-let patch of Alain Frisch, for testing. Extended
+   to handle trywith constructs
+
+2011/05/02:
+ * Simplif: inlining of one-use functions extended to tupled functions
+
 2011/05/01:
  * Rec2loop: approximate arguments to get rid of invariant arguments
    for self tailcall recursive functions

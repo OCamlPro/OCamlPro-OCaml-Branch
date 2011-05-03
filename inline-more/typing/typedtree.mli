@@ -164,5 +164,8 @@ val map_pattern_desc : (pattern -> pattern) -> pattern_desc -> pattern_desc
 val let_bound_idents: (pattern * expression) list -> Ident.t list
 val rev_let_bound_idents: (pattern * expression) list -> Ident.t list
 
+(* Added for Alain's inplace-let patch *)
+val pat_bound_idents: pattern -> Ident.t list
+
 (* Alpha conversion of patterns *)
 val alpha_pat : (Ident.t * Ident.t) list -> pattern -> pattern

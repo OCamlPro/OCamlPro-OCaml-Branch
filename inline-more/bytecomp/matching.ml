@@ -2567,6 +2567,60 @@ let for_trywith param pat_act_list =
 let for_let loc param pat body =
   compile_matching loc None (partial_function loc) param [pat, body] Partial
 
+(* BEGIN Alain's inplace-let patch *)
+
+let rec transform_return f = function
+  | Llet (k, id, l1, l2) -> Llet (k, id, l1, transform_return f l2)
+  | Lletrec (l1, l2) -> Lletrec (l1, transform_return f l2)
+  | Lifthenelse (lcond, lthen, lelse) ->
+    Lifthenelse (lcond, transform_return f lthen, transform_return f lelse)
+  | Lsequence (l1, l2) -> Lsequence (l1, transform_return f l2)
+  | Ltrywith (l1, i, l2) ->
+    Ltrywith (transform_return f l1, i, transform_return f l2)
+  | l -> f l
+
+let rec seq = function
+  | [] -> Lconst (Const_pointer 0)
+  | [l] -> l
+  | l1 :: rest -> Lsequence (l1, seq rest)
+
+let copy_ids ids =
+  seq (List.map (fun (id, id') -> Lassign (id, Lvar id')) ids)
+
+let rec assign_pat opt loc pat lam =
+  match pat.pat_desc, lam with
+    | Tpat_tuple patl, Lprim(Pmakeblock _, lams) ->
+      opt := true;
+      seq (List.rev (List.map2 (assign_pat opt loc) patl lams))
+    | Tpat_tuple patl, Lconst(Const_block (_, _, scl)) ->
+      opt := true;
+      seq (List.map2 (fun p sc -> assign_pat opt loc p (Lconst sc)) patl scl)
+    | Tpat_var id, lam ->
+      Lassign(id, lam)
+    | _ ->
+      let ids = pat_bound_idents pat in
+      let ids = List.map (fun id -> id, Ident.rename id) ids in
+      let pat' = alpha_pat ids pat in
+      for_let loc lam pat' (copy_ids ids)
+
+let for_let loc param pat body =
+  match pat.pat_desc with
+    | Tpat_any | Tpat_var _ -> for_let loc param pat body
+    | _ ->
+      let opt = ref false in
+      let ids = pat_bound_idents pat in
+      let bind = transform_return (assign_pat opt loc pat) param in
+      let cont = Lsequence (bind, body) in
+      if !opt then
+ 	List.fold_left
+ 	  (fun k id -> Llet (Variable, id, Lconst (Const_pointer 0), k))
+ 	  cont
+ 	  ids
+      else
+ 	for_let loc param pat body
+
+(* END Alain's inplace-let patch *)
+
 (* Handling of tupled functions and matchings *)
 
 (* Easy case since variables are available *)
