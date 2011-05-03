@@ -770,7 +770,7 @@ let transl_class ids cl_id arity pub_meths cl vflag =
                 [Lvar tables; Lprim(Pmakeblock(0, Immutable), inh_keys)]),
          lam)
   and lset cached i lam =
-    Lprim(Psetfield(i, true), [Lvar cached; lam])
+    Lprim(Psetfield(i, true, false), [Lvar cached; lam])
   in
   let ldirect () =
     ltable cla

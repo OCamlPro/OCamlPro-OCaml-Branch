@@ -520,9 +520,10 @@ let transl_store_structure glob map prims str =
 
   and store_ident id =
     try
-      let (pos, cc) = Ident.find_same id map in
+      let (pos, exported, cc) = Ident.find_same id map in
       let init_val = apply_coercion cc (Lvar id) in
-      Lprim(Psetfield(pos, false), [Lprim(Pgetglobal glob, []); init_val])
+      (* Fabrice: why is is_ptr false ? because the globals are in the static area ? *)
+      Lprim(Psetfield(pos, false, not exported), [Lprim(Pgetglobal glob, []); init_val])
     with Not_found ->
       fatal_error("Translmod.store_ident: " ^ Ident.unique_name id)
 
@@ -531,7 +532,7 @@ let transl_store_structure glob map prims str =
 
   and add_ident may_coerce id subst =
     try
-      let (pos, cc) = Ident.find_same id map in
+      let (pos, exported, cc) = Ident.find_same id map in
       match cc with
         Tcoerce_none ->
           Ident.add id (Lprim(Pfield pos, [Lprim(Pgetglobal glob, [])])) subst
@@ -543,8 +544,9 @@ let transl_store_structure glob map prims str =
   and add_idents may_coerce idlist subst =
     List.fold_right (add_ident may_coerce) idlist subst
 
-  and store_primitive (pos, prim) cont =
-    Lsequence(Lprim(Psetfield(pos, false),
+  and store_primitive (pos, exported, prim) cont =
+    (* Fabrice: why is is_ptr false ? because the globals are in the static area ? *)
+    Lsequence(Lprim(Psetfield(pos, false, not exported),
                     [Lprim(Pgetglobal glob, []); transl_primitive prim]),
               cont)
 
@@ -564,31 +566,33 @@ let transl_store_structure glob map prims str =
    and the list of all primitives exported as values. *)
 
 let build_ident_map restr idlist more_ids =
-  let rec natural_map pos map prims = function
+  let rec natural_map pos map prims exported = function
     [] ->
       (map, prims, pos)
   | id :: rem ->
-      natural_map (pos+1) (Ident.add id (pos, Tcoerce_none) map) prims rem in
+      natural_map (pos+1) (Ident.add id (
+	pos, exported,
+	  Tcoerce_none) map) prims exported rem in
   let (map, prims, pos) =
     match restr with
 	Tcoerce_none ->
-	  natural_map 0 Ident.empty [] idlist
+	  natural_map 0 Ident.empty [] true idlist
       | Tcoerce_structure pos_cc_list ->
 	let idarray = Array.of_list idlist in
 	let rec export_map pos map prims undef = function
         [] ->
-          natural_map pos map prims undef
+          natural_map pos map prims false undef
 	  | (source_pos, Tcoerce_primitive p) :: rem ->
-            export_map (pos + 1) map ((pos, p) :: prims) undef rem
+            export_map (pos + 1) map ((pos, true, p) :: prims) undef rem
 	  | (source_pos, cc) :: rem ->
             let id = idarray.(source_pos) in
-            export_map (pos + 1) (Ident.add id (pos, cc) map)
+            export_map (pos + 1) (Ident.add id (pos, true, cc) map)
               prims (list_remove id undef) rem
 	in export_map 0 Ident.empty [] idlist pos_cc_list
       | _ ->
 	fatal_error "Translmod.build_ident_map"
   in
-  natural_map pos map prims more_ids
+  natural_map pos map prims false more_ids
 
 (* Compile an implementation using transl_store_structure
    (for the native-code compiler). *)
@@ -742,7 +746,7 @@ let transl_store_package component_names target_name coercion =
       (List.length component_names,
        make_sequence
          (fun pos id ->
-           Lprim(Psetfield(pos, false),
+           Lprim(Psetfield(pos, false, false),
                  [Lprim(Pgetglobal target_name, []);
                   get_component id]))
          0 component_names)
@@ -751,7 +755,7 @@ let transl_store_package component_names target_name coercion =
       (List.length pos_cc_list,
        make_sequence
          (fun dst (src, cc) ->
-           Lprim(Psetfield(dst, false),
+           Lprim(Psetfield(dst, false, false),
                  [Lprim(Pgetglobal target_name, []);
                   apply_coercion cc (get_component id.(src))]))
          0 pos_cc_list)

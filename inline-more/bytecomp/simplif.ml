@@ -39,7 +39,7 @@ let rec eliminate_ref id = function
               eliminate_ref id e2)
   | Lprim(Pfield 0, [Lvar v]) when Ident.same v id ->
       Lvar id
-  | Lprim(Psetfield(0, _), [Lvar v; e]) when Ident.same v id ->
+  | Lprim(Psetfield(0, _, _), [Lvar v; e]) when Ident.same v id ->
       Lassign(id, eliminate_ref id e)
   | Lprim(Poffsetref delta, [Lvar v]) when Ident.same v id ->
       Lassign(id, Lprim(Poffsetint delta, [Lvar id]))
@@ -263,18 +263,22 @@ type var_usage_counter = {
   mutable var_nargs : int;
 }
 
+type variable =
+    Dynamic of Ident.t
+  | Static of Ident.t * int
+
 let simplify_lets lam =
 
   (* First pass: count the occurrences of all identifiers *)
   let occ = Hashtbl.create 83 in
-  let count_var v =
+  let count_var (v : variable) =
     try
       let use = Hashtbl.find occ v in
       use
     with Not_found -> { var_noccs = 0; var_nargs = 0 }
 
   in
-  let incr_var bv v =
+  let incr_var bv (v : variable) =
     try (* bv is the set of locally bound variables, i.e. variables that can be safely inlined *)
       let use = Tbl.find v bv in
       use.var_noccs <- use.var_noccs + 1;
@@ -286,7 +290,7 @@ let simplify_lets lam =
       with Not_found -> () (* only Llet bound variables have a use-count *)
   in
 
-  let incr_fun bv v nargs =
+  let incr_fun bv (v : variable) nargs =
 (*    Printf.fprintf stderr "incr_fun %s -> %d\n%!" (Ident.unique_name v)  nargs; *)
     try (* bv is the set of locally bound variables, i.e. variables that can be safely inlined *)
       let use = Tbl.find v bv in
@@ -306,7 +310,7 @@ let simplify_lets lam =
       with Not_found -> () (* only Llet bound variables have a use-count *)
   in
 
-  let new_var bv v = (* add a variable both to the global table (occ) and to the locally bound variables *)
+  let new_var bv (v : variable) = (* add a variable both to the global table (occ) and to the locally bound variables *)
     let use =  { var_noccs = 0; var_nargs = (-1) } in
     Hashtbl.add occ v use;
     Tbl.add v use bv
@@ -314,24 +318,35 @@ let simplify_lets lam =
 
   let rec count bv lam =
     match lam with
-      | Lvar v -> incr_var bv v
+      | Lvar v -> incr_var bv (Dynamic v)
+      | Lprim(Pfield pos, [Lprim(Pgetglobal glob, [])]) -> incr_var bv (Static (glob, pos))
       | Lconst cst -> ()
       | Lapply(Lvar v, ll, _) ->
-	incr_fun bv v (List.length ll); List.iter (count bv) ll
+	incr_fun bv (Dynamic v) (List.length ll); List.iter (count bv) ll
+      | Lapply(Lprim(Pfield pos, [Lprim(Pgetglobal glob, [])]), ll, _) ->
+	incr_fun bv (Static (glob, pos)) (List.length ll); List.iter (count bv) ll
       | Lapply(l1, ll, _) -> count bv l1; List.iter (count bv) ll
       | Lfunction(kind, params, l) ->
 	let bv = List.fold_left (fun bv v ->
-	  new_var bv v) Tbl.empty params in
+	  new_var bv (Dynamic v)) Tbl.empty params in
 	count bv l (* empty locally-bound variables for abstractions *)
+
+      | Lsequence(
+	Llet(Strict, v, l1, Lprim(Psetfield(pos, _, true), [Lprim(Pgetglobal glob, []); Lvar v' ])), l2)
+	    when (not !Clflags.debug) && v = v' ->
+(*	Printf.fprintf stderr "Found declaration of intern global %s (counting)\n%!" (Ident.unique_name v); *)
+	let bv' = new_var bv (Static (glob, pos)) in
+	count bv' l2;
+	count bv l1
       | Llet(str, v, Lvar w, l2) when not !Clflags.debug ->
       (* v will be replaced by w in l2, so each occurrence of v in l2
          increases w's refcount *)
 	begin
 	  try
-	    let wc = Hashtbl.find occ w in
-	    let bv' = new_var bv v in
+	    let wc = Hashtbl.find occ (Dynamic w) in
+	    let bv' = new_var bv (Dynamic v) in
 	    count bv' l2;
-	    let vc = count_var v in
+	    let vc = count_var (Dynamic v) in
 	    wc.var_noccs <- wc.var_noccs + vc.var_noccs;
 	    wc.var_nargs <- 0 (* TODO *)
 	  with Not_found -> (* w is not a Llet defined variable. Don't count bv *)
@@ -339,13 +354,14 @@ let simplify_lets lam =
 	    count bv l2
 	end
       | Llet(str, v, l1, l2) ->
-	let bv' = new_var bv v in
+	let bv' = new_var bv (Dynamic v) in
 	count bv' l2;
       (* If v is unused, l1 will be removed, so don't count its variables *)
-	if str = Strict || (count_var v).var_noccs > 0 then count bv l1
+	if str = Strict || (count_var (Dynamic v)).var_noccs > 0 then count bv l1
       | Lletrec(bindings, body) ->
 	List.iter (fun (v, l) -> count bv l) bindings;
 	count bv body
+
       | Lprim(p, ll) -> List.iter (count bv) ll
       | Lswitch(l, sw) ->
 	count_default bv sw ;
@@ -368,7 +384,7 @@ let simplify_lets lam =
       | Lsend(_, m, o, ll) -> List.iter (count bv) (m::o::ll)
       | Levent(l, _) -> count bv l
       | Lifused(v, l) ->
-	if (count_var v).var_noccs > 0 then count bv l
+	if (count_var (Dynamic v)).var_noccs > 0 then count bv l
 
   and count_default bv sw = match sw.sw_failaction with
     | None -> ()
@@ -393,13 +409,18 @@ let simplify_lets lam =
   let rec simplif = function
   Lvar v as l ->
     begin try
-            Hashtbl.find subst v
+            Hashtbl.find subst (Dynamic v)
       with Not_found ->
 	l
     end
     | Lconst cst as l -> l
-    | Lapply(Lvar v, ll, loc) ->
+    | Lapply(l1, ll, loc) ->
       begin try
+	      let v = match l1 with
+		  Lvar v -> Dynamic v
+		| Lprim(Pfield pos, [Lprim(Pgetglobal glob, [])]) -> Static (glob, pos)
+		| _ -> raise Not_found
+	      in
 	      let lfun = Hashtbl.find subst v in
 	      match lfun with
 		| Lfunction(Curried, args, body) when List.length args = List.length ll ->
@@ -426,13 +447,12 @@ let simplify_lets lam =
 		| _ ->
 		  Lapply(lfun, List.map simplif ll, loc)
 	with Not_found ->
-	  Lapply(Lvar v, List.map simplif ll, loc)
+	  Lapply(simplif l1, List.map simplif ll, loc)
       end
-    | Lapply(l1, ll, loc) -> Lapply(simplif l1, List.map simplif ll, loc)
     | Lfunction(kind, params, l) -> Lfunction(kind, params, simplif l)
     | Llet(str, v, Lvar w, l2) when not !Clflags.debug ->
 (*      Printf.fprintf stderr "Subst variable aliasing %s by %s\n%!" (Ident.unique_name v) (Ident.unique_name w); *)
-      Hashtbl.add subst v (simplif (Lvar w));
+      Hashtbl.add subst (Dynamic v) (simplif (Lvar w));
       simplif l2
     | Llet(Strict, v, Lprim(Pmakeblock(0, Mutable), [linit]), lbody)
 	when not !Clflags.debug ->
@@ -446,7 +466,8 @@ let simplify_lets lam =
           Llet(Strict, v, Lprim(Pmakeblock(0, Mutable), [slinit]), slbody)
       end
     | Llet(Strict, v, ((Lfunction (kind, params,_)) as lfun), body) ->
-      let use = count_var v in
+      let vv = Dynamic v in
+      let use = count_var vv in
 
 (*      Printf.fprintf stderr "used of %s -> %d with %d args\n%!" (Ident.unique_name v)
 	use.var_noccs use.var_nargs    ; *)
@@ -462,21 +483,53 @@ let simplify_lets lam =
 	    )
 	    ->
 (*	  Printf.fprintf stderr "inline  %s\n%!" (Ident.unique_name v); *)
-          Hashtbl.add subst v lfun; simplif body
+          Hashtbl.add subst vv lfun; simplif body
 	| n -> Llet(Strict, v, simplif lfun, simplif body)
       end
+
+    | Lsequence(
+      Llet(Strict, v, ((Lfunction (kind, params,_)) as lfun),
+	   Lprim(Psetfield(pos, maybe_ptr, true), [Lprim(Pgetglobal glob, []); Lvar v'])), body)
+      when (not !Clflags.debug) && v = v' ->
+(*      Printf.fprintf stderr "Found declaration of intern global %s (simplifying)\n%!" (Ident.unique_name v); *)
+      let vv = Static (glob, pos) in
+      let use = Hashtbl.find occ vv in
+
+(*      Printf.fprintf stderr "used of %s -> %d with %d args\n%!" (Ident.unique_name v)
+	use.var_noccs use.var_nargs    ; *)
+      begin match use.var_noccs with
+          0 ->
+(*	    Printf.fprintf stderr "Remove useless closure %s\n%!" (Ident.unique_name v); *)
+	    simplif body
+	| 1 when not !Clflags.debug &&
+	    (
+	      (kind = Curried && List.length params = use.var_nargs)
+	      ||
+		(kind = Tupled && 1 = use.var_nargs)
+	    )
+	    ->
+(*	  Printf.fprintf stderr "inline  %s\n%!" (Ident.unique_name v); *)
+          Hashtbl.add subst vv lfun; simplif body
+	| n ->
+	  Lsequence
+	    (Llet(Strict, v, simplif lfun,
+	       Lprim(Psetfield(pos, maybe_ptr, true), [Lprim(Pgetglobal glob, []); Lvar v])), simplif body)
+      end
+
+
     | Llet(Alias, v, l1, l2) ->
-      begin match (count_var v).var_noccs with
+      let vv = Dynamic v in
+      begin match (count_var vv).var_noccs with
           0 ->
 (*	    Printf.fprintf stderr "Remove useless Alias %s\n%!" (Ident.unique_name v); *)
 	    simplif l2
 	| 1 when not !Clflags.debug ->
 (*	  Printf.fprintf stderr "Subst alias %s\n%!" (Ident.unique_name v); *)
-          Hashtbl.add subst v (simplif l1); simplif l2
+          Hashtbl.add subst vv (simplif l1); simplif l2
 	| n -> Llet(Alias, v, simplif l1, simplif l2)
       end
     | Llet(StrictOpt, v, l1, l2) ->
-      begin match (count_var v).var_noccs with
+      begin match (count_var (Dynamic v)).var_noccs with
           0 ->
 (*	    Printf.fprintf stderr "Remove useless StrictOpt %s\n%!" (Ident.unique_name v); *)
 	    simplif l2
@@ -504,7 +557,7 @@ let simplify_lets lam =
     | Ltrywith(l1, v, l2) -> Ltrywith(simplif l1, v, simplif l2)
     | Lifthenelse(l1, l2, l3) -> Lifthenelse(simplif l1, simplif l2, simplif l3)
     | Lsequence(Lifused(v, l1), l2) ->
-      if (count_var v).var_noccs > 0
+      if (count_var (Dynamic v)).var_noccs > 0
       then Lsequence(simplif l1, simplif l2)
       else simplif l2
     | Lsequence(l1, l2) -> Lsequence(simplif l1, simplif l2)
@@ -515,7 +568,7 @@ let simplify_lets lam =
     | Lsend(k, m, o, ll) -> Lsend(k, simplif m, simplif o, List.map simplif ll)
     | Levent(l, ev) -> Levent(simplif l, ev)
     | Lifused(v, l) ->
-      if (count_var v).var_noccs > 0 then simplif l else lambda_unit
+      if (count_var (Dynamic v)).var_noccs > 0 then simplif l else lambda_unit
   in
   simplif lam
 

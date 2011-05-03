@@ -1010,6 +1010,8 @@ let rec transl = function
       Cifthenelse(test_bool(transl cond), transl ifso, transl ifnot)
   | Usequence(exp1, exp2) ->
       Csequence(remove_unit(transl exp1), transl exp2)
+  | Uwhile(Uconst (Const_pointer 1,_), body) ->
+    return_unit (Cloop(remove_unit(transl body)))
   | Uwhile(cond, body) ->
       let raise_num = next_raise_count () in
       return_unit
@@ -1127,7 +1129,7 @@ and transl_prim_1 p arg dbg =
 and transl_prim_2 p arg1 arg2 dbg =
   match p with
   (* Heap operations *)
-    Psetfield(n, ptr) ->
+    Psetfield(n, ptr, _) ->
       if ptr then
         return_unit(Cop(Cextcall("caml_modify", typ_void, false, Debuginfo.none),
                         [field_address (transl arg1) n; transl arg2]))

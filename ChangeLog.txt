@@ -1,4 +1,7 @@
 2011/05/03:
+ * Lambda: add a boolean parameter to Psetfield, true for non-exported globals
+ * Simplif: inline non-exported global functions only used once
+ * Cmmgen: while true do ... done simplified to infinite loop
  * Matching: applied inplace-let patch of Alain Frisch, for testing. Extended
    to handle trywith constructs
 

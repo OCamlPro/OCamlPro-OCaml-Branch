@@ -254,7 +254,7 @@ let rec finition trs g =
 		   ArgInvariant _ -> catch
 		 | ArgVariant (call_arg, ref_arg, catch_arg, in_arg) ->
 		   Lsequence(
-		     Lprim(Psetfield(0, true), [Lvar ref_arg; Lvar catch_arg]),
+		     Lprim(Psetfield(0, true, false), [Lvar ref_arg; Lvar catch_arg]),
 		 (* We cannot use the following because we are before eliminate_ref.
 		    Lassign (ref_arg, Lvar catch_arg), *)
 		     catch)

@@ -145,7 +145,7 @@ let primitives_table = create_hashtable 57 [
   "%ignore", Pignore;
   "%field0", Pfield 0;
   "%field1", Pfield 1;
-  "%setfield0", Psetfield(0, true);
+  "%setfield0", Psetfield(0, true, false);
   "%makeblock", Pmakeblock(0, Immutable);
   "%makemutable", Pmakeblock(0, Mutable);
   "%raise", Praise;
@@ -325,7 +325,7 @@ let transl_prim prim args =
     let p = Hashtbl.find primitives_table prim.prim_name in
     (* Try strength reduction based on the type of the argument *)
     begin match (p, args) with
-        (Psetfield(n, _), [arg1; arg2]) -> Psetfield(n, maybe_pointer arg2)
+        (Psetfield(n, _, _), [arg1; arg2]) -> Psetfield(n, maybe_pointer arg2, false)
       | (Parraylength Pgenarray, [arg])   -> Parraylength(array_kind arg)
       | (Parrayrefu Pgenarray, arg1 :: _) -> Parrayrefu(array_kind arg1)
       | (Parraysetu Pgenarray, arg1 :: _) -> Parraysetu(array_kind arg1)
@@ -692,7 +692,7 @@ and transl_exp0 e =
   | Texp_setfield(arg, lbl, newval) ->
       let access =
         match lbl.lbl_repres with
-          Record_regular -> Psetfield(lbl.lbl_pos, maybe_pointer newval)
+          Record_regular -> Psetfield(lbl.lbl_pos, maybe_pointer newval, false)
         | Record_float -> Psetfloatfield lbl.lbl_pos in
       Lprim(access, [transl_exp arg; transl_exp newval])
   | Texp_array expr_list ->
@@ -1000,7 +1000,7 @@ and transl_record all_labels repres lbl_expr_list opt_init_expr =
     let rec update_field (lbl, expr) cont =
       let upd =
         match lbl.lbl_repres with
-          Record_regular -> Psetfield(lbl.lbl_pos, maybe_pointer expr)
+          Record_regular -> Psetfield(lbl.lbl_pos, maybe_pointer expr, false)
         | Record_float -> Psetfloatfield lbl.lbl_pos in
       Lsequence(Lprim(upd, [Lvar copy_id; transl_exp expr]), cont) in
     begin match opt_init_expr with

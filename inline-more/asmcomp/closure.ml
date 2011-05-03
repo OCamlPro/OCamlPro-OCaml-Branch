@@ -93,7 +93,7 @@ let prim_size prim args =
   | Psetglobal id -> 1
   | Pmakeblock(tag, mut) -> 5 + List.length args
   | Pfield f -> 1
-  | Psetfield(f, isptr) -> if isptr then 4 else 1
+  | Psetfield(f, isptr, _) -> if isptr then 4 else 1
   | Pfloatfield f -> 1
   | Psetfloatfield f -> 1
   | Pduprecord _ -> 10 + List.length args
@@ -738,10 +738,10 @@ let rec close fenv cenv = function
           Value_tuple a when n < Array.length a -> a.(n)
         | _ -> Value_unknown in
       check_constant_result lam (Uprim(Pfield n, [ulam], Debuginfo.none)) fieldapprox
-  | Lprim(Psetfield(n, _), [Lprim(Pgetglobal id, []); lam]) ->
+  | Lprim(Psetfield(n, _, _), [Lprim(Pgetglobal id, []); lam]) ->
       let (ulam, approx) = close fenv cenv lam in
       (!global_approx).(n) <- approx;
-      (Uprim(Psetfield(n, false), [getglobal id; ulam], Debuginfo.none),
+      (Uprim(Psetfield(n, false, false), [getglobal id; ulam], Debuginfo.none),
        Value_unknown)
   | Lprim(Praise, [Levent(arg, ev)]) ->
       let (ulam, approx) = close fenv cenv arg in
