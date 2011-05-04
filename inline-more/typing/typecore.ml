@@ -1675,8 +1675,8 @@ let rec type_exp env sexp =
       re { body with exp_loc = sexp.pexp_loc; exp_type = ety }
   | Pexp_pack m ->
       raise (Error (loc, Cannot_infer_signature))
-  | Pexp_open (lid, e) ->
-      type_exp (!type_open env sexp.pexp_loc lid) e
+  | Pexp_open (lid, alias, e) ->
+      type_exp (!type_open env sexp.pexp_loc alias lid) e
 
 and type_label_exp create env loc ty (lid, sarg) =
   let label = Typetexp.find_label env sarg.pexp_loc lid in

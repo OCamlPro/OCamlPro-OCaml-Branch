@@ -326,7 +326,10 @@ and expression i ppf x =
   | Pexp_pack me ->
       line i ppf "Pexp_pack";
       module_expr i ppf me
-  | Pexp_open (m, e) ->
+  | Pexp_open (m1, Some m2, e) ->
+      line i ppf "Pexp_open \"%a\" as \"%s\"\n" fmt_longident m1 m2;
+      expression i ppf e
+  | Pexp_open (m, None, e) ->
       line i ppf "Pexp_open \"%a\"\n" fmt_longident m;
       expression i ppf e
 
@@ -545,7 +548,9 @@ and signature_item i ppf x =
   | Psig_modtype (s, md) ->
       line i ppf "Psig_modtype \"%s\"\n" s;
       modtype_declaration i ppf md;
-  | Psig_open (li) -> line i ppf "Psig_open %a\n" fmt_longident li;
+  | Psig_open (li, None) -> line i ppf "Psig_open %a\n" fmt_longident li;
+  | Psig_open (li1, Some li2) ->
+    line i ppf "Psig_open \"%a\" as \"%s\"\n" fmt_longident li1 li2 ;
   | Psig_include (mt) ->
       line i ppf "Psig_include\n";
       module_type i ppf mt;
@@ -630,7 +635,9 @@ and structure_item i ppf x =
   | Pstr_modtype (s, mt) ->
       line i ppf "Pstr_modtype \"%s\"\n" s;
       module_type i ppf mt;
-  | Pstr_open (li) -> line i ppf "Pstr_open %a\n" fmt_longident li;
+  | Pstr_open (li, None) -> line i ppf "Pstr_open %a\n" fmt_longident li;
+  | Pstr_open (li1, Some li2) ->
+    line i ppf "Pstr_open \"%a\" as \"%s\"\n" fmt_longident li1 li2 ;
   | Pstr_class (l) ->
       line i ppf "Pstr_class\n";
       list i class_declaration ppf l;
