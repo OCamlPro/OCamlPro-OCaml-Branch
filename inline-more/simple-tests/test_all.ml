@@ -86,16 +86,64 @@ let _ =
 
 let modules = Sys.readdir ".";;
 
+let lines_of_file filename =
+  let ic = open_in filename in
+  let lines = ref [] in
+  begin
+    try
+      while true do
+	let line = input_line ic in
+	lines := line :: !lines
+      done
+    with _ -> close_in ic
+  end;
+  List.rev !lines
+;;
+
+let read_config conf_filename byte_args opt_args =
+  if Sys.file_exists conf_filename then begin
+    Printf.fprintf stderr "Reading conf file %s\n%!" conf_filename;
+    let lines = lines_of_file conf_filename in
+    List.iter (fun line ->
+      match line with
+	  "" -> ()
+	| "stdlib" ->
+	  byte_args := !byte_args @ [ "-I"; "../stdlib"; "stdlib.cma" ];
+	  opt_args := !opt_args @ [ "-I"; "../stdlib"; "stdlib.cmxa" ];
+	| "unix" ->
+	  byte_args := !byte_args @ [ "-I"; "../otherlibs/unix"; "unix.cma" ];
+	  opt_args := !opt_args @ [ "-I"; "../otherlibs/unix"; "unix.cmxa" ];
+	| "nums" ->
+	  byte_args := !byte_args @ [ "-I"; "../otherlibs/nums"; "nums.cma" ];
+	  opt_args := !opt_args @ [ "-I"; "../otherlibs/nums"; "nums.cmxa" ];
+	| "nostdlib" ->
+	  let args = [ "-nostdlib"; "-nopervasives"; "-I"; "Externals"; "Externals/externals.ml"; ]
+	  in
+	  byte_args := !byte_args @ args;
+	  opt_args := !opt_args @ args;
+	| _ ->
+	  Printf.fprintf stderr "Unknown config line [%s]\n%!" (String.escaped line)
+    ) lines;
+  end
+;;
+
 let _ =
   Array.iter (fun file ->
     if Sys.is_directory file then
       let modname = file in
       let functions = Sys.readdir file in
+      let byte_args = ref [] in
+      let opt_args = ref [] in
+      read_config (Filename.concat modname (modname ^ ".conf")) byte_args opt_args;
       Array.iter (fun funname ->
 	let dirname = Filename.concat modname funname in
 	if Sys.is_directory dirname then
 	  let tests = Sys.readdir dirname in
 	  let print_function = ref true in
+
+	  let byte_args = ref !byte_args in
+	  let opt_args = ref !opt_args in
+	  read_config (Filename.concat dirname (funname ^ ".conf")) byte_args opt_args;
 	  Array.iter (fun ml_file ->
 	    (if Filename.check_suffix ml_file ".ml" then
 		let ml_file = Filename.concat dirname ml_file in
@@ -111,22 +159,26 @@ let _ =
 		    Printf.fprintf stderr "Testing function %s.%s\n%!" modname funname;
 		  end;
 
+		  let byte_args = ref !byte_args in
+		  let opt_args = ref !opt_args in
+		  let conf_filename = Filename.concat basename ".conf" in
+		  read_config conf_filename byte_args opt_args;
+
 		  let test_log = basename ^ ".log" in
 		  Printf.fprintf stderr "Test %s (%s)\n%!" qualified_testname test_log;
 		  let fd = Unix.openfile test_log openflags 0o644 in
 
 		  if test_ocamlc && Sys.file_exists "../ocamlc" then
 		    begin (* ocamlc *)
-		      let test_byte = basename ^ ".exe" in
+		      let test_byte = basename ^ "_byte2byte.exe" in
 		      let pid = create_process "../boot/ocamlrun"
 			(
 			[
 			  "../ocamlc";
 			  "-o"; test_byte;
-			  "-I"; "Externals";
-			  "-nostdlib"; "-nopervasives";
-			  "Externals/externals.ml";
 			] @
+			  !byte_args
+			  @
 			  more_flags
 			  @ [
 			  ml_file
@@ -146,16 +198,15 @@ let _ =
 
 		  if test_ocamlopt && Sys.file_exists "../ocamlopt" then
 		    begin (* ocamlc *)
-		      let test_byte = basename ^ ".exe" in
+		      let test_byte = basename ^ "byte2opt.exe" in
 		      let pid = create_process "../boot/ocamlrun"
 			([
 			  "../ocamlopt";
 			  "-o"; test_byte;
 			  "../asmrun/libasmrun.a"; "-cclib"; "-ldl -lm";
-			  "-I"; "Externals";
-			  "-nostdlib"; "-nopervasives";
-			  "Externals/externals.ml";
 			] @
+			  !opt_args
+			  @
 			  more_flags
 			  @ [
 			  ml_file
@@ -175,14 +226,13 @@ let _ =
 
 		  if test_ocamlc_opt && Sys.file_exists "../ocamlc.opt" then
 		    begin (* ocamlc.opt *)
-		      let test_byte = basename ^ ".exe" in
+		      let test_byte = basename ^ "opt2byte.exe" in
 		      let pid = create_process "../ocamlc.opt"
 			([
 			  "-o"; test_byte;
-			  "-I"; "Externals";
-			  "-nostdlib"; "-nopervasives";
-			  "Externals/externals.ml";
-						] @
+			 ] @
+			  !byte_args
+			  @
 			  more_flags
 			  @ [
 			  ml_file
@@ -202,15 +252,14 @@ let _ =
 
 		  if test_ocamlopt_opt && Sys.file_exists "../ocamlopt.opt" then
 		    begin (* ocamlopt.opt *)
-		      let test_byte = basename ^ ".exe" in
+		      let test_byte = basename ^ "opt2opt.exe" in
 		      let pid = create_process "../ocamlopt.opt"
 			([
 			  "-o"; test_byte;
 			  "../asmrun/libasmrun.a";"-cclib"; "-ldl -lm";
-			  "-I"; "Externals";
-			  "-nostdlib"; "-nopervasives";
-			  "Externals/externals.ml";
 			] @
+			  !opt_args
+			  @
 			  more_flags
 			  @ [
 			  ml_file
