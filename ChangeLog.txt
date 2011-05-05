@@ -1,3 +1,11 @@
+2011/05/05:
+ * Typemod: attempt to improve the expressiveness of recursive modules by
+  allowing approximations to depend on the environment including previous
+  modules
+ * Translmod: improve compilation of recursive modules: modules that
+  have no recursive dependencies at runtime are compiled directly using
+  the topological order.
+
 2011/05/03:
  * Lambda: add a boolean parameter to Psetfield, true for non-exported globals
  * Simplif: inline non-exported global functions only used once

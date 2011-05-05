@@ -258,6 +258,7 @@ and approx_sig env ssg =
           let (id, newenv) = Env.enter_module name mty env in
           Tsig_module(id, mty, Trec_not) :: approx_sig newenv srem
       | Psig_recmodule sdecls ->
+	Printf.fprintf stderr "Psig_recmodule... approx_sig\n%!";
           let decls =
             List.map
               (fun (name, smty) ->
@@ -406,14 +407,19 @@ and transl_signature env sg =
             let rem = transl_sig newenv srem in
             Tsig_module(id, mty, Trec_not) :: rem
         | Psig_recmodule sdecls ->
+	  Printf.fprintf stderr "Psig_recmodule transl_signature\n%!";
             List.iter
               (fun (name, smty) ->
+	  Printf.fprintf stderr "Psig_recmodule transl_signature check %s\n%!" name;
                  check "module" item.psig_loc module_names name)
               sdecls;
+	  Printf.fprintf stderr "Psig_recmodule transl_signature (2)\n%!";
             let (decls, newenv) =
               transl_recmodule_modtypes item.psig_loc env sdecls in
+	  Printf.fprintf stderr "Psig_recmodule transl_signature done\n%!";
             let rem = transl_sig newenv srem in
             map_rec (fun rs (id, mty) -> Tsig_module(id, mty, rs)) decls rem
+
         | Psig_modtype(name, sinfo) ->
             check "module type" item.psig_loc modtype_names name;
             let info = transl_modtype_info env sinfo in
@@ -472,24 +478,57 @@ and transl_modtype_info env sinfo =
       Tmodtype_manifest(transl_modtype env smty)
 
 and transl_recmodule_modtypes loc env sdecls =
+  Printf.fprintf stderr "Psig_recmodule transl_recmodule_modtypes (1)\n%!";
   let make_env curr =
     List.fold_left
-      (fun env (id, mty) -> Env.add_module id mty env)
+      (fun env (id, mty) ->
+	Printf.fprintf stderr "addenv %s\n%!" (Ident.unique_name id);
+	Env.add_module id mty env)
       env curr in
+  Printf.fprintf stderr "Psig_recmodule transl_recmodule_modtypes (2)\n%!";
   let transition env_c curr =
     List.map2
       (fun (_, smty) (id, mty) -> (id, transl_modtype env_c smty))
       sdecls curr in
+  Printf.fprintf stderr "Psig_recmodule transl_recmodule_modtypes (3)\n%!";
+
+(*
   let init =
     List.map
       (fun (name, smty) ->
-        (Ident.create name, approx_modtype env smty))
+  	Printf.fprintf stderr "approx_modtype %s\n%!" name;
+      (Ident.create name, approx_modtype env smty))
       sdecls in
+  Printf.fprintf stderr "Psig_recmodule transl_recmodule_modtypes (4)\n%!";
   let env0 = make_env init in
+*)
+  (*  let initial_env = env in *)
+  let (env0, init) = List.fold_left
+    (fun (env, init) (name, smty) ->
+      let id = Ident.create name in
+      Printf.fprintf stderr "addenv0 %s\n%!" name;
+      let mty = (* try
+		  approx_modtype initial_env smty
+	with _ -> *)
+	  approx_modtype env smty
+      in
+      (Env.add_module id mty env),
+      (id, mty) :: init
+    )
+      (env, []) sdecls in
+  let init = List.rev init in
+  Printf.fprintf stderr "Psig_recmodule transl_recmodule_modtypes (5)\n%!";
+
   let dcl1 = transition env0 init in
+  Printf.fprintf stderr "Psig_recmodule transl_recmodule_modtypes (6)\n%!";
+
   let env1 = make_env dcl1 in
+  Printf.fprintf stderr "Psig_recmodule transl_recmodule_modtypes (6)\n%!";
+
   check_recmod_typedecls env1 sdecls dcl1;
   let dcl2 = transition env1 dcl1 in
+  Printf.fprintf stderr "Psig_recmodule transl_recmodule_modtypes (7)\n%!";
+
 (*
   List.iter
     (fun (id, mty) ->
@@ -855,6 +894,7 @@ and type_structure funct_body anchor env sstr scope =
          Tsig_module(id, modl.mod_type, Trec_not) :: sig_rem,
          final_env)
     | {pstr_desc = Pstr_recmodule sbind; pstr_loc = loc} :: srem ->
+      Printf.fprintf stderr "Pstr_recmodule...\n%!";
         List.iter
           (fun (name, _, _) -> check "module" loc module_names name)
           sbind;

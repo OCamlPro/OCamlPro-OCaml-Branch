@@ -176,25 +176,62 @@ let reorder_rec_bindings bindings =
   let num_bindings = Array.length id in
   let status = Array.create num_bindings Undefined in
   let res = ref [] in
+
   let rec emit_binding i =
     match status.(i) with
-      Defined -> ()
-    | Inprogress -> raise(Error(loc.(i), Circular_dependency id.(i)))
-    | Undefined ->
-        if init.(i) = None then begin
+	Defined -> true
+      | Inprogress -> false
+      | Undefined ->
+	let defined = ref true in
+        status.(i) <- Inprogress;
+        for j = 0 to num_bindings - 1 do
+          if IdentSet.mem id.(j) fv.(i) then begin
+	    let dep_defined = emit_binding j in
+	    if not dep_defined && !defined then defined := false
+	  end
+        done;
+	if !defined then begin
+          res := (id.(i), None, rhs.(i)) :: !res;
+          status.(i) <- Defined;
+	  true
+	end else
+	  false
+  in
+  for i = 0 to num_bindings - 1 do
+    match status.(i) with
+	Undefined -> ignore (emit_binding i)
+      | Inprogress -> ()
+      | Defined -> ()
+  done;
+
+  for i = 0 to num_bindings - 1 do
+    match status.(i) with
+	Undefined -> ()
+      | Inprogress -> status.(i) <- Undefined
+      | Defined -> ()
+  done;
+
+  let rec emit_binding i =
+    match status.(i) with
+	Defined -> ()
+      | Inprogress -> raise(Error(loc.(i), Circular_dependency id.(i)))
+      | Undefined ->
+	if init.(i) = None then begin
           status.(i) <- Inprogress;
           for j = 0 to num_bindings - 1 do
-            if IdentSet.mem id.(j) fv.(i) then emit_binding j
+            if IdentSet.mem id.(j) fv.(i) then emit_binding j;
           done
         end;
         res := (id.(i), init.(i), rhs.(i)) :: !res;
-        status.(i) <- Defined in
+        status.(i) <- Defined
+  in
   for i = 0 to num_bindings - 1 do
     match status.(i) with
-      Undefined -> emit_binding i
-    | Inprogress -> assert false
-    | Defined -> ()
+	Undefined -> emit_binding i
+      | Inprogress -> assert false
+      | Defined _ -> ()
   done;
+
   List.rev !res
 
 (* Generate lambda-code for a reordered list of bindings *)
