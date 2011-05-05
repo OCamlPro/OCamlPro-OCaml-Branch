@@ -502,10 +502,8 @@ structure_item:
       { mkstr(Pstr_recmodule(List.rev $3)) }
   | MODULE TYPE ident EQUAL module_type
       { mkstr(Pstr_modtype($3, $5)) }
-  | OPEN mod_longident AS UIDENT
-      { mkstr(Pstr_open ($2, Some ($4))) }
   | OPEN mod_longident
-      { mkstr(Pstr_open ($2, None)) }
+      { mkstr(Pstr_open $2) }
   | CLASS class_declarations
       { mkstr(Pstr_class (List.rev $2)) }
   | CLASS TYPE class_type_declarations
@@ -572,10 +570,8 @@ signature_item:
       { mksig(Psig_modtype($3, Pmodtype_abstract)) }
   | MODULE TYPE ident EQUAL module_type
       { mksig(Psig_modtype($3, Pmodtype_manifest $5)) }
-  | OPEN mod_longident AS UIDENT
-      { mksig(Psig_open ($2, Some ($4))) }
   | OPEN mod_longident
-      { mksig(Psig_open ($2,None)) }
+      { mksig(Psig_open $2) }
   | INCLUDE module_type
       { mksig(Psig_include $2) }
   | CLASS class_descriptions
@@ -873,10 +869,8 @@ expr:
       { mkexp(Pexp_let($2, List.rev $3, $5)) }
   | LET MODULE UIDENT module_binding IN seq_expr
       { mkexp(Pexp_letmodule($3, $4, $6)) }
-  | LET OPEN mod_longident AS UIDENT IN seq_expr
-      { mkexp(Pexp_open($3, Some ($5), $7)) }
   | LET OPEN mod_longident IN seq_expr
-      { mkexp(Pexp_open($3, None, $5)) }
+      { mkexp(Pexp_open($3, $5)) }
   | FUNCTION opt_bar match_cases
       { mkexp(Pexp_function("", None, List.rev $3)) }
   | FUN labeled_simple_pattern fun_def
@@ -996,7 +990,7 @@ simple_expr:
   | simple_expr DOT label_longident
       { mkexp(Pexp_field($1, $3)) }
   | mod_longident DOT LPAREN seq_expr RPAREN
-      { mkexp(Pexp_open($1, None, $4)) }
+      { mkexp(Pexp_open($1, $4)) }
   | mod_longident DOT LPAREN seq_expr error
       { unclosed "(" 3 ")" 5 }
   | simple_expr DOT LPAREN seq_expr RPAREN

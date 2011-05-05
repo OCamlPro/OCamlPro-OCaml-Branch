@@ -56,28 +56,12 @@ let extract_sig_open env loc mty =
     Tmty_signature sg -> sg
   | _ -> raise(Error(loc, Structure_expected mty))
 
-    (* Lookup the type of a module path *)
-
-let type_module_path env loc lid =
-  try
-    Env.lookup_module lid env
-  with Not_found ->
-    raise(Typetexp.Error(loc, Typetexp.Unbound_module lid))
-
 (* Compute the environment after opening a module *)
 
-let type_open env loc alias lid =
-  match alias with
-      None ->
-	let (path, mty) = Typetexp.find_module env loc lid in
-	let sg = extract_sig_open env loc mty in
-	Env.open_signature path sg env
-    | Some alias ->
-      let (path, mty) = type_module_path env loc lid in
-      let mty = Mtype.strengthen env mty path in
-      let id = Ident.create alias in
-      Env.store_module id path mty env
-
+let type_open env loc lid =
+  let (path, mty) = Typetexp.find_module env loc lid in
+  let sg = extract_sig_open env loc mty in
+  Env.open_signature path sg env
 
 (* Record a module type *)
 let rm node =
@@ -85,7 +69,7 @@ let rm node =
   node
 
 (* Forward declaration, to be filled in by type_module_type_of *)
-let type_module_type_of_fwd
+let type_module_type_of_fwd 
   : (Env.t -> Parsetree.module_expr -> module_type) ref
   = ref (fun env m -> assert false)
 
@@ -272,8 +256,8 @@ and approx_sig env ssg =
           let info = approx_modtype_info env sinfo in
           let (id, newenv) = Env.enter_modtype name info env in
           Tsig_modtype(id, info) :: approx_sig newenv srem
-      | Psig_open (lid, alias) ->
-          approx_sig (type_open env item.psig_loc alias lid) srem
+      | Psig_open lid ->
+          approx_sig (type_open env item.psig_loc lid) srem
       | Psig_include smty ->
           let mty = approx_modtype env smty in
           let sg = Subst.signature Subst.identity
@@ -420,8 +404,8 @@ and transl_signature env sg =
             let (id, newenv) = Env.enter_modtype name info env in
             let rem = transl_sig newenv srem in
             Tsig_modtype(id, info) :: rem
-        | Psig_open (lid, alias) ->
-            transl_sig (type_open env item.psig_loc alias lid) srem
+        | Psig_open lid ->
+            transl_sig (type_open env item.psig_loc lid) srem
         | Psig_include smty ->
             let mty = transl_modtype env smty in
             let sg = Subst.signature Subst.identity
@@ -659,7 +643,7 @@ let modtype_of_package env loc p nl tl =
       let sg' =
         List.map
           (function
-              Tsig_type (id, ({type_params=[]} as td), rs)
+              Tsig_type (id, ({type_params=[]} as td), rs) 
               when List.mem (Ident.name id) nl ->
                 let ty = List.assoc (Ident.name id) ntl in
                 Tsig_type (id, {td with type_manifest = Some ty}, rs)
@@ -887,8 +871,8 @@ and type_structure funct_body anchor env sstr scope =
         (Tstr_modtype(id, mty) :: str_rem,
          Tsig_modtype(id, Tmodtype_manifest mty) :: sig_rem,
          final_env)
-    | {pstr_desc = Pstr_open (lid, alias); pstr_loc = loc} :: srem ->
-        type_struct (type_open env loc alias lid) srem
+    | {pstr_desc = Pstr_open lid; pstr_loc = loc} :: srem ->
+        type_struct (type_open env loc lid) srem
     | {pstr_desc = Pstr_class cl; pstr_loc = loc} :: srem ->
          List.iter
            (fun {pci_name = name} -> check "type" loc type_names name)
