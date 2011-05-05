@@ -165,7 +165,9 @@ let rec add_expr bv exp =
       add_pattern bv pat; List.iter (add_class_field bv) fieldl
   | Pexp_newtype (_, e) -> add_expr bv e
   | Pexp_pack m -> add_module bv m
-  | Pexp_open (m, e) -> addmodule bv m; add_expr bv e
+  | Pexp_open (m, Some alias, e) -> addmodule bv m; add_expr (StringSet.add alias bv) e
+  | Pexp_open (m, None, e) -> addmodule bv m; add_expr bv e
+
 and add_pat_expr_list bv pel =
   List.iter (fun (p, e) -> add_pattern bv p; add_expr bv e) pel
 
@@ -209,8 +211,10 @@ and add_sig_item bv item =
       | Pmodtype_manifest mty -> add_modtype bv mty
       end;
       bv
-  | Psig_open lid ->
+  | Psig_open (lid, None) ->
       addmodule bv lid; bv
+  | Psig_open (lid, Some alias) ->
+      addmodule bv lid; StringSet.add alias bv
   | Psig_include mty ->
       add_modtype bv mty; bv
   | Psig_class cdl ->
@@ -261,8 +265,10 @@ and add_struct_item bv item =
       bv'
   | Pstr_modtype(id, mty) ->
       add_modtype bv mty; bv
-  | Pstr_open l ->
+  | Pstr_open (l, None) ->
       addmodule bv l; bv
+  | Pstr_open (l, Some alias) ->
+      addmodule bv l; StringSet.add alias bv
   | Pstr_class cdl ->
       List.iter (add_class_declaration bv) cdl; bv
   | Pstr_class_type cdtl ->

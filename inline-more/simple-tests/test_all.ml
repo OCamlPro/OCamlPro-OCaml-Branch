@@ -56,9 +56,10 @@ let create_process cmd args oc =
   ignore (Unix.write oc s 0 (String.length s));
   let args = Array.of_list (cmd :: args) in
   let pid = Unix.create_process cmd args Unix.stdin oc oc in
-  pid
+  let t0 = Unix.gettimeofday () in
+  (pid, t0)
 
-let rec wait_command pid =
+let rec wait_command (pid, t0) =
   try
     let rec iter pid =
       let (_, status) = Unix.waitpid [] pid in
@@ -67,7 +68,10 @@ let rec wait_command pid =
 	| Unix.WSIGNALED n -> n
 	| _ -> iter pid
     in
-    iter pid
+    let n = iter pid in
+    let t1 = Unix.gettimeofday () in
+    let ns = int_of_float ((t1 -. t0) *. 1000.) in
+    (n, ns)
   with e ->
     Printf.printf "Exception %s in waitpid\n%!" (Printexc.to_string e);
     exit 2
@@ -184,14 +188,14 @@ let _ =
 			  ml_file
 			]) fd in
 		      Printf.fprintf stderr "\t%s\tbyte.byte COMP\t%!" qualified_testname;
-		      let status = wait_command pid in
-		      Printf.fprintf stderr "%d\n%!" status;
+		      let (status, ms) = wait_command pid in
+		      Printf.fprintf stderr "%d\t%d\n%!" status ms;
 		      if status = 0 && run_also then begin
 			let pid = create_process
 			  "../boot/ocamlrun" ["./" ^ test_byte ] fd in
 			Printf.fprintf stderr "\t%s\tBYTE EXEC\t%!" qualified_testname;
-			let status = wait_command pid in
-			Printf.fprintf stderr "%d\n%!" (100 - status);
+			let (status, ms) = wait_command pid in
+			Printf.fprintf stderr "%d\t%d\n%!" (100 - status) ms;
 			if status <> 100 then keep_log := true;
 		      end else keep_log := true;
 		    end;
@@ -212,14 +216,14 @@ let _ =
 			  ml_file
 			]) fd in
 		      Printf.fprintf stderr "\t%s\topt.byte COMP\t%!" qualified_testname;
-		      let status = wait_command pid in
-		      Printf.fprintf stderr "%d\n%!" status;
+		      let (status, ms) = wait_command pid in
+		      Printf.fprintf stderr "%d\t%d\n%!" status ms;
 		      if status = 0 && run_also then begin
 			let pid = create_process
 			  ("./" ^ test_byte) [] fd in
 			Printf.fprintf stderr "\t%s\tASM EXEC\t%!" qualified_testname;
-			let status = wait_command pid in
-			Printf.fprintf stderr "%d\n%!" (100 - status);
+			let (status, ms) = wait_command pid in
+			Printf.fprintf stderr "%d\t%d\n%!" (100 - status) ms;
 			if status <> 100 then keep_log := true;
 		      end else keep_log := true;
 		    end;
@@ -238,14 +242,14 @@ let _ =
 			  ml_file
 			]) fd in
 		      Printf.fprintf stderr "\t%s\tbyte.opt COMP\t%!" qualified_testname;
-		      let status = wait_command pid in
-		      Printf.fprintf stderr "%d\n%!" status;
+		      let (status, ms) = wait_command pid in
+		      Printf.fprintf stderr "%d\t%d\n%!" status ms;
 		      if status = 0 && run_also then begin
 			let pid = create_process
 			  "../boot/ocamlrun" ["./" ^ test_byte ] fd in
 			Printf.fprintf stderr "\t%s\tBYTE EXEC\t%!" qualified_testname;
-			let status = wait_command pid in
-			Printf.fprintf stderr "%d\n%!" (100 - status);
+			let (status, ms) = wait_command pid in
+			Printf.fprintf stderr "%d\t%d\n%!" (100 - status) ms;
 			if status <> 100 then keep_log := true;
 		      end else keep_log := true;
 		    end;
@@ -265,14 +269,14 @@ let _ =
 			  ml_file
 			]) fd in
 		      Printf.fprintf stderr "\t%s\topt.opt COMP\t%!" qualified_testname;
-		      let status = wait_command pid in
-		      Printf.fprintf stderr "%d\n%!" status;
+		      let (status, ms) = wait_command pid in
+		      Printf.fprintf stderr "%d\t%d\n%!" status ms;
 		      if status = 0 && run_also then begin
 			let pid = create_process
 			  ("./" ^ test_byte) [] fd in
 			Printf.fprintf stderr "\t%s\tASM EXEC\t%!" qualified_testname;
-			let status = wait_command pid in
-			Printf.fprintf stderr "%d\n%!" (100 - status);
+			let (status, ms) = wait_command pid in
+			Printf.fprintf stderr "%d\t%d\n%!" (100 - status) ms;
 			if status <> 100 then keep_log := true;
 		      end else keep_log := true;
 		    end;

@@ -286,7 +286,7 @@ and rw_exp iflag sexp =
       List.iter (rewrite_class_field iflag) fieldl
 
   | Pexp_newtype (_, sexp) -> rewrite_exp iflag sexp
-  | Pexp_open (_, e) -> rewrite_exp iflag e
+  | Pexp_open (_, _, e) -> rewrite_exp iflag e
   | Pexp_pack (smod) -> rewrite_mod iflag smod
 
 and rewrite_ifbody iflag ghost sifbody =

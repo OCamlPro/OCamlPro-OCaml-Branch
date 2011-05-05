@@ -1,4 +1,6 @@
 2011/05/05:
+ * Simple-tests: test_all.ml uses configuration scripts and displays
+    execution time
  * Typemod: attempt to improve the expressiveness of recursive modules by
   allowing approximations to depend on the environment including previous
   modules

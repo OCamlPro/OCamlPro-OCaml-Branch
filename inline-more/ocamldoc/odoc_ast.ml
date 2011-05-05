@@ -1288,6 +1288,10 @@ module Analyser =
                raise (Failure (Odoc_messages.module_not_found_in_typedtree complete_name))
           )
 
+      | Parsetree.Pstr_open (longident, Some alias) ->
+          (0, env, [])
+
+
       | Parsetree.Pstr_recmodule mods ->
           (* A VOIR ICI pb: pas de lien avec les module type
              dans les contraintes sur les modules *)
@@ -1381,7 +1385,7 @@ module Analyser =
           in
           (0, new_env2, [ Element_module_type mt ])
 
-      | Parsetree.Pstr_open longident ->
+      | Parsetree.Pstr_open (longident, None) ->
           (* A VOIR : enrichir l'environnement quand open ? *)
           let ele_comments = match comment_opt with
             None -> []
