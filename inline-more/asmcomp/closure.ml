@@ -513,9 +513,8 @@ let rec close fenv cenv = function
 
       | ((ufunct, Value_closure(fundesc, approx_res)), uargs)
           when nargs < fundesc.fun_arity ->
-
 	let first_args = List.map (fun arg ->
-	  (Ident.create "arg", arg) ) args in
+	  (Ident.create "arg", arg) ) uargs in
 	let final_args = Array.to_list (Array.init (fundesc.fun_arity - nargs) (fun _ ->
 	  Ident.create "arg")) in
 	let rec iter args body =
@@ -523,16 +522,18 @@ let rec close fenv cenv = function
 	      [] -> body
 	    | (arg1, arg2) :: args ->
 	      iter args
-		(Llet ( Strict, arg1, arg2, body))
+		(Ulet ( arg1, arg2, body))
 	in
-	let new_fun = iter first_args
+	let internal_args =
+	  (List.map (fun (arg1, arg2) -> Lvar arg1) first_args)
+	  @ (List.map (fun arg -> Lvar arg ) final_args)
+	in
+	let (new_fun, approx) = close fenv cenv
 	  (Lfunction(
-	    Curried, final_args,
-	    Lapply(funct, (List.map (fun (arg1, arg2) ->
-	      Lvar arg1) first_args) @ (List.map (fun arg ->
-		Lvar arg ) final_args), loc)))
+	    Curried, final_args, Lapply(funct, internal_args, loc)))
 	in
-	close fenv cenv new_fun
+	let new_fun = iter first_args new_fun in
+	(new_fun, approx)
 
       | ((ufunct, Value_closure(fundesc, approx_res)), uargs)
         when fundesc.fun_arity > 0 && nargs > fundesc.fun_arity ->
