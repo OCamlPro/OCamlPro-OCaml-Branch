@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 3.13.0+opt
-=======
-3.13.0+opt (28e7d655ef78e08293746ffed325e7c28c99ab37 2011-05-19 14:10:08+02:00)
->>>>>>> 3a52298... Applied Glondu's patch to fix compilation on recent Linux distributions
 
 # The version string is the first line of this file.
 # It must be in the format described in stdlib/sys.mli
