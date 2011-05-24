@@ -177,32 +177,39 @@ and signatures env subst sig1 sig2 =
   (* Build a table of the components of sig1, along with their positions.
      The table is indexed by kind and name of component *)
   let rec build_component_table pos tbl = function
-      [] -> tbl
+      [] -> (tbl, pos)
     | item :: rem ->
         let (id, name) = item_ident_name item in
-        let nextpos =
-          match item with
+	let size =
+	  match item with
             Tsig_value(_,{val_kind = Val_prim _})
           | Tsig_type(_,_,_)
           | Tsig_modtype(_,_)
-          | Tsig_cltype(_,_,_) -> pos
+          | Tsig_cltype(_,_,_) -> 0
           | Tsig_value(_,_)
           | Tsig_exception(_,_)
           | Tsig_module(_,_,_)
-          | Tsig_class(_, _,_) -> pos+1 in
+          | Tsig_class(_, _,_) -> 1 in
+        let nextpos = pos + size in
         build_component_table nextpos
-                              (Tbl.add name (id, item, pos) tbl) rem in
-  let comps1 =
+                              (Tbl.add name (id, item, pos, size) tbl) rem in
+  let (comps1, size1) =
     build_component_table 0 Tbl.empty sig1 in
   (* Pair each component of sig2 with a component of sig1,
      identifying the names along the way.
      Return a coercion list indicating, for all run-time components
      of sig2, the position of the matching run-time components of sig1
      and the coercion to be applied to it. *)
-  let rec pair_components subst paired unpaired = function
+  let rec pair_components pos2 subst paired unpaired = function
       [] ->
         begin match unpaired with
-            [] -> signature_components new_env subst (List.rev paired)
+            [] ->
+	      let coercion = signature_components new_env subst (List.rev paired) in
+	      if size1 = pos2 then
+		simplify_structure_coercion coercion
+	      else
+		if coercion = [] then Tcoerce_none else
+		Tcoerce_structure coercion
           | _  -> raise(Error unpaired)
         end
     | item2 :: rem ->
@@ -218,7 +225,7 @@ and signatures env subst sig1 sig2 =
           | _ -> name2, true
         in
         begin try
-          let (id1, item1, pos1) = Tbl.find name2 comps1 in
+          let (id1, item1, pos1, size) = Tbl.find name2 comps1 in
           let new_subst =
             match item2 with
               Tsig_type _ ->
@@ -230,15 +237,15 @@ and signatures env subst sig1 sig2 =
             | Tsig_value _ | Tsig_exception _ | Tsig_class _ | Tsig_cltype _ ->
                 subst
           in
-          pair_components new_subst
+          pair_components (pos2+size) new_subst
             ((item1, item2, pos1) :: paired) unpaired rem
         with Not_found ->
           let unpaired =
             if report then Missing_field id2 :: unpaired else unpaired in
-          pair_components subst paired unpaired rem
+          pair_components pos2 subst paired unpaired rem
         end in
   (* Do the pairing and checking, and return the final coercion *)
-  simplify_structure_coercion (pair_components subst [] [] sig2)
+   (pair_components 0 subst [] [] sig2)
 
 (* Inclusion between signature components *)
 
