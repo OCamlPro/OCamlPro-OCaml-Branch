@@ -318,7 +318,7 @@ let free_ids get l =
 
 let free_variables l =
   free_ids (function Lvar id -> [id]
-    | Lprim( (Pgetglobal id | Psetglobal id), _) when Ident.functor_part id ->
+    | Lprim( (Pgetglobal id | Psetglobal id), _) when Ident.is_functor_part id ->
       [Env.get_functor_part (Ident.name id)]
     | _ -> []) l
 

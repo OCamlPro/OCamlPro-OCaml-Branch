@@ -41,6 +41,8 @@ let current_unit =
     ui_curry_fun = [];
     ui_apply_fun = [];
     ui_send_fun = [];
+    ui_functor_parts = [];
+    ui_functor_args = [];
     ui_force_link = false }
 
 let symbolname_for_pack pack name =
@@ -118,6 +120,7 @@ let cmx_not_found_crc =
   "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
 
 let get_global_info global_ident =
+(*  Printf.fprintf stderr "get_global_info %s\n" (Ident.unique_name global_ident); *)
   let modname = Ident.name global_ident in
   if modname = current_unit.ui_name then
     Some current_unit
@@ -152,7 +155,7 @@ let record_global_approx_toplevel id =
   Hashtbl.add toplevel_approx current_unit.ui_name current_unit.ui_approx
 
 let global_approx id =
-  if Ident.is_predef_exn id then Value_unknown
+  if Ident.is_predef_exn id || Ident.is_functor_arg id then Value_unknown
   else try Hashtbl.find toplevel_approx (Ident.name id)
   with Not_found ->
     match get_global_info id with

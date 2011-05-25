@@ -1,6 +1,6 @@
 OCAMLC=../byterun/ocamlrun ../ocamlc -I ../stdlib
 # -dinstr
-OCAMLOPT=../byterun/ocamlrun ../ocamlopt -I ../stdlib -dcmm -dclosure
+OCAMLOPT=../byterun/ocamlrun ../ocamlopt -I ../stdlib -dcmm -dclosure -S
 FUNCTOR = -functor arguments/x.mli -dlambda
 PACK_FUNCTOR = -pack-functor Make -dlambda
 
@@ -17,12 +17,12 @@ byte:
 
 opt:
 	$(OCAMLOPT) -c arguments/x.mli
-	$(OCAMLOPT) -c $(FUNCTOR) a.mli
-	$(OCAMLOPT) -c $(FUNCTOR) a.ml
-	$(OCAMLOPT) -c $(FUNCTOR) b.ml
-	$(OCAMLOPT) -I arguments $(PACK_FUNCTOR) -o lib.cmo a.cmo b.cmo
+	$(OCAMLOPT) -c -for-pack Lib $(FUNCTOR) a.mli
+	$(OCAMLOPT) -c -for-pack Lib $(FUNCTOR) a.ml
+	$(OCAMLOPT) -c -for-pack Lib $(FUNCTOR) b.ml
+	$(OCAMLOPT) -I arguments $(PACK_FUNCTOR) -o lib.cmx a.cmx b.cmx
 	$(OCAMLOPT) -c test.ml
-	$(OCAMLOPT) -o test.byte lib.cmo test.cmo
+	$(OCAMLOPT) -o test.opt lib.cmx test.cmx
 
 PACKER=	../../../../ocplib-private/src/ocp-pack/ocp-pack.byte
 

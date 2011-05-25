@@ -800,7 +800,7 @@ let functions = (Queue.create() : (string * Ident.t list * ulambda) Queue.t)
 let rec transl = function
     Uvar id ->
       Cvar id
-  | Uprim(Pgetglobal id, [], _ ) when Ident.functor_part id ->
+  | Uprim(Pgetglobal id, [], _ ) when Ident.is_functor_part id ->
       Printf.fprintf stderr "Found getglobal %s\n%!" (Ident.unique_name id);
       let exp = Uvar (Env.get_functor_part (Ident.name id)) in
       transl exp

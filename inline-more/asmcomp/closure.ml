@@ -42,7 +42,7 @@ let rec build_closure_env env_param pos = function
    contain the right names if the -for-pack option is active. *)
 
 let getglobal cenv id =
-  if Ident.functor_part id then
+  if Ident.is_functor_part id then
     let id = Env.get_functor_part (Ident.name id) in
     try Tbl.find id cenv with Not_found -> Uvar id
   else

@@ -196,6 +196,12 @@ open Cmi_format
    assumptions on a module: one uses it as an argument, the other one as
    a dependency. This should fail. *)
 
+let add_functor_arg id =
+  Ident.make_functor_part id;
+  Ident.make_functor_arg id;
+  let name = Ident.name id in
+  Hashtbl.add functor_parts name (Ident.create name)
+
 let add_functor_part id =
   Ident.make_functor_part id;
   let name = Ident.name id in
@@ -209,12 +215,12 @@ let functor_parts () =
   !list
 
 let read_pers_struct modname filename ps_kind =
-  Printf.fprintf stderr "Read_Pers_Struct %s %s\n%!" filename
+(*  Printf.fprintf stderr "Read_Pers_Struct %s %s\n%!" filename
     (match ps_kind with
 	PersistentStructureArgument -> "(functor argument)"
       | PersistentStructureDependency -> ""
       | PersistentStructureUnit -> "(functor unit)"
-    );
+    ); *)
   let ic = open_in_bin filename in
   try
     let buffer = String.create (String.length cmi_magic_number) in
@@ -228,7 +234,7 @@ let read_pers_struct modname filename ps_kind =
     let ps_id = Ident.create_persistent cmi.cmi_name in
     begin
       match ps_kind with
-	| PersistentStructureArgument -> add_functor_part ps_id
+	| PersistentStructureArgument -> add_functor_arg ps_id
 	| PersistentStructureDependency ->
 	  if cmi.cmi_functor_args <> [] then add_functor_part ps_id
 	| PersistentStructureUnit -> ()
@@ -292,7 +298,7 @@ let rec find_module_descr path env =
         if Ident.persistent id
         then (find_pers_struct (Ident.name id)).ps_comps
         else begin
-	  Printf.fprintf stderr "Non persistent ident %s not found\n%!" (Ident.unique_name id);
+(*	  Printf.fprintf stderr "Non persistent ident %s not found\n%!" (Ident.unique_name id); *)
 	  raise Not_found
 	end
       end
@@ -404,7 +410,7 @@ let rec lookup_module_descr lid env =
         Ident.find_name s env.components
       with Not_found ->
         if s = !current_unit then raise Not_found;
-	Printf.fprintf stderr "lookup_module_descr %s\n%!" s;
+(*	Printf.fprintf stderr "lookup_module_descr %s\n%!" s; *)
         let ps = find_pers_struct s in
         (Pident ps.ps_id, ps.ps_comps)
       end
@@ -435,9 +441,9 @@ and lookup_module lid env =
         Ident.find_name s env.modules
       with Not_found ->
         if s = !current_unit then raise Not_found;
-	Printf.fprintf stderr "lookup_module %s\n%!" s;
+(*	Printf.fprintf stderr "lookup_module %s\n%!" s; *)
         let ps = find_pers_struct s in
-	Printf.fprintf stderr "found module %s with ident %s\n%!" s (Ident.unique_name ps.ps_id);
+(*	Printf.fprintf stderr "found module %s with ident %s\n%!" s (Ident.unique_name ps.ps_id); *)
         (Pident ps.ps_id, Tmty_signature ps.ps_sig)
       end
   | Ldot(l, s) ->

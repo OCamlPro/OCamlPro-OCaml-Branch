@@ -125,7 +125,9 @@ module Options = Main_args.Make_optcomp_options (struct
   let _output_obj = set output_c_object
   let _p = set gprofile
   let _pack = set make_package
-  let _pack_functor s = pack_functor := Some s
+  let _pack_functor s =
+    set make_package ();
+    pack_functor := Some s
   let _functor s = functors := s :: !functors
   let _pp s = preprocessor := Some s
   let _principal = set principal
@@ -185,7 +187,7 @@ let main () =
     else if !make_package then begin
       Optcompile.init_path();
       let target = extract_output !output_name in
-      Asmpackager.package_files ppf (List.rev !objfiles) target;
+      Asmpackager.package_files ppf (List.rev !objfiles) target !pack_functor;
     end
     else if !shared then begin
       Optcompile.init_path();

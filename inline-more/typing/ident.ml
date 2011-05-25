@@ -19,6 +19,7 @@ type t = { stamp: int; name: string; mutable flags: int }
 let global_flag = 1
 let predef_exn_flag = 2
 let functor_part_flag = 4
+let functor_arg_flag = 8
 
 (* A stamp of 0 denotes a persistent identifier *)
 
@@ -81,15 +82,21 @@ let global i =
 let make_functor_part i =
   i.flags <- i.flags lor functor_part_flag
 
-let functor_part i =
+let is_functor_part i =
   (i.flags land functor_part_flag) <> 0
+
+let make_functor_arg i =
+  i.flags <- i.flags lor functor_arg_flag
+
+let is_functor_arg i =
+  (i.flags land functor_arg_flag) <> 0
 
 let is_predef_exn i =
   (i.flags land predef_exn_flag) <> 0
 
 let print ppf i =
   match i.stamp with
-  | 0 -> fprintf ppf "%s!%s" i.name (if functor_part i then "$" else "")
+  | 0 -> fprintf ppf "%s!%s" i.name (if is_functor_arg i then "@" else if is_functor_part i then "$" else "")
   | -1 -> fprintf ppf "%s#" i.name
   | n -> fprintf ppf "%s/%i%s" i.name n (if global i then "g" else "")
 

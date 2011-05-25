@@ -79,7 +79,7 @@ let check_units members =
 
 (* Make the .o file for the package *)
 
-let make_package_object ppf members targetobj targetname coercion =
+let make_package_object ppf members targetobj targetname coercion functor_info =
   let objtemp =
     if !Clflags.keep_asm_file
     then chop_extension_if_any targetobj ^ ".pack" ^ Config.ext_obj
@@ -98,7 +98,7 @@ let make_package_object ppf members targetobj targetname coercion =
   Asmgen.compile_implementation
     (chop_extension_if_any objtemp) ppf
     (Translmod.transl_store_package
-       components (Ident.create_persistent targetname) coercion);
+       components (Ident.create_persistent targetname) coercion functor_info);
   let objfiles =
     List.map
       (fun m -> chop_extension_if_any m.pm_file ^ Config.ext_obj)
@@ -111,7 +111,7 @@ let make_package_object ppf members targetobj targetname coercion =
 
 (* Make the .cmx file for the package *)
 
-let build_package_cmx members cmxfile =
+let build_package_cmx members cmxfile functor_args =
   let unit_names =
     List.map (fun m -> m.pm_name) members in
   let filter lst =
@@ -147,25 +147,27 @@ let build_package_cmx members cmxfile =
           union(List.map (fun info -> info.ui_send_fun) units);
       ui_force_link =
           List.exists (fun info -> info.ui_force_link) units;
+      ui_functor_parts = []; (* TODO *)
+      ui_functor_args = functor_args; (* TODO *)
     } in
   Compilenv.write_unit_info pkg_infos cmxfile
 
 (* Make the .cmx and the .o for the package *)
 
 let package_object_files ppf files targetcmx
-                         targetobj targetname coercion =
+                         targetobj targetname coercion  (functor_info, functor_args) =
   let pack_path =
     match !Clflags.for_package with
     | None -> targetname
     | Some p -> p ^ "." ^ targetname in
   let members = map_left_right (read_member_info pack_path) files in
   check_units members;
-  make_package_object ppf members targetobj targetname coercion;
-  build_package_cmx members targetcmx
+  make_package_object ppf members targetobj targetname coercion functor_info;
+  build_package_cmx members targetcmx functor_args
 
 (* The entry point *)
 
-let package_files ppf files targetcmx =
+let package_files ppf files targetcmx functor_name =
   let files =
     List.map
       (fun f ->
@@ -180,9 +182,14 @@ let package_files ppf files targetcmx =
   Location.input_name := targetcmx;
   (* Set the name of the current compunit *)
   Compilenv.reset ?packname:!Clflags.for_package targetname;
+  let functor_id = match functor_name with
+      None -> None
+    | Some modname -> Some (Ident.create modname) in
   try
-    let coercion = Typemod.package_units files targetcmi targetname in
+    let (coercion, functor_info, functor_args) =
+      Typemod.package_units files targetcmi targetname functor_id in
     package_object_files ppf files targetcmx targetobj targetname coercion
+      (functor_info, functor_args)
   with x ->
     remove_file targetcmx; remove_file targetobj;
     raise x

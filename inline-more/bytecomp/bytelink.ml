@@ -10,6 +10,8 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(* TODO: check that we are not linking a functor part *)
+
 (* $Id$ *)
 
 (* Link a set of .cmo files and produce a bytecode executable. *)

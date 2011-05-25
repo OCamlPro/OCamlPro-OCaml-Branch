@@ -27,7 +27,8 @@ val transl_package:
       Ident.t option list -> Ident.t -> module_coercion ->
   (Ident.t * Ident.t) option -> lambda
 val transl_store_package:
-      Ident.t option list -> Ident.t -> module_coercion -> int * lambda
+      Ident.t option list -> Ident.t -> module_coercion ->
+  (Ident.t * Ident.t) option -> int * lambda
 
 val toplevel_name: Ident.t -> string
 val nat_toplevel_name: Ident.t -> Ident.t * int
