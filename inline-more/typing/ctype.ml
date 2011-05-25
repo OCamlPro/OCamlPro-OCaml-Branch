@@ -3495,3 +3495,104 @@ let rec collapse_conj env visited ty =
 
 let collapse_conj_params env params =
   List.iter (collapse_conj env []) params
+
+module PrintDebugType = struct
+
+  type context = {
+    table : (int, string) Hashtbl.t;
+  }
+
+  let rec type_expr c t =
+    try
+      Hashtbl.find c.table t.id
+    with Not_found ->
+      Hashtbl.add c.table t.id (Printf.sprintf "{ty.id = %d}" t.id);
+      let b = Buffer.create 100 in
+      Printf.bprintf b "{ desc = %s;\n" (type_desc c t.desc);
+      Printf.bprintf b "  level = %d;\n" t.level;
+      Printf.bprintf b "  id = %d }" t.id;
+      let s = Buffer.contents b in
+      Hashtbl.add c.table t.id s;
+      s
+
+  and type_desc c t =
+    match t with
+	Tvar -> "Tvar"
+      | Tarrow _ -> "Tarrow"
+      | Ttuple _ -> "Ttuple"
+      | Tconstr _ -> "Tconstr"
+      | Tobject _ -> "Tobject"
+      | Tfield _ -> "Tfield"
+      | Tnil -> "Tnil"
+      | Tlink _ -> "Tlink"
+      | Tsubst _ -> "Tsubst"
+      | Tvariant _ -> "Tvariant"
+      | Tunivar -> "Tunivar"
+      | Tpoly _ -> "Tpoly"
+      | Tpackage _ -> "Tpackage"
+
+(*
+      | Tarrow of label * type_expr * type_expr * commutable
+      | Ttuple of type_expr list
+      | Tconstr of Path.t * type_expr list * abbrev_memo ref
+      | Tobject of type_expr * (Path.t * type_expr list) option ref
+      | Tfield of string * field_kind * type_expr * type_expr
+      | Tnil
+      | Tlink of type_expr
+      | Tsubst of type_expr         (* for copying *)
+      | Tvariant of row_desc
+      | Tunivar
+      | Tpoly of type_expr * type_expr list
+      | Tpackage of Path.t * string list * type_expr list
+*)
+
+(*
+and row_desc =
+    { row_fields: (label * row_field) list;
+      row_more: type_expr;
+      row_bound: unit;
+      row_closed: bool;
+      row_fixed: bool;
+      row_name: (Path.t * type_expr list) option }
+
+and row_field =
+    Rpresent of type_expr option
+  | Reither of bool * type_expr list * bool * row_field option ref
+        (* 1st true denotes a constant constructor *)
+        (* 2nd true denotes a tag in a pattern matching, and
+           is erased later *)
+  | Rabsent
+
+and abbrev_memo =
+    Mnil
+  | Mcons of private_flag * Path.t * type_expr * type_expr * abbrev_memo
+  | Mlink of abbrev_memo ref
+
+and field_kind =
+    Fvar of field_kind option ref
+  | Fpresent
+  | Fabsent
+
+and commutable =
+    Cok
+  | Cunknown
+  | Clink of commutable ref
+*)
+
+  let type_expr t = type_expr { table = Hashtbl.create 13 } t
+
+end
+
+let _ =
+  Printexc.register_printer (fun e ->
+    match e with
+	Unify list ->
+	  let b = Buffer.create 100 in
+	  Printf.bprintf b "Ctype.Unify [\n";
+	  List.iter (fun (t1, t2) ->
+	    Printf.bprintf b "      (%s,\n" (PrintDebugType.type_expr t1);
+	    Printf.bprintf b "       %s)\n" (PrintDebugType.type_expr t2);
+	  ) list;
+	  Printf.bprintf b "            ]\n";
+	  Some (Buffer.contents b)
+      | _ -> None)

@@ -19,8 +19,8 @@ include stdlib/StdlibModules
 
 CAMLC=boot/ocamlrun boot/ocamlc -nostdlib -I boot
 CAMLOPT=boot/ocamlrun ./ocamlopt -nostdlib -I stdlib -I otherlibs/dynlink
-COMPFLAGS=-strict-sequence -warn-error A $(INCLUDES)
-LINKFLAGS=
+COMPFLAGS=-strict-sequence -warn-error A $(INCLUDES) -g
+LINKFLAGS=-g
 
 CAMLYACC=boot/ocamlyacc
 YACCFLAGS=-v
@@ -48,7 +48,7 @@ TYPING=typing/unused_var.cmo typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/types.cmo \
   typing/btype.cmo typing/oprint.cmo \
   typing/subst.cmo typing/predef.cmo \
-  typing/datarepr.cmo typing/env.cmo \
+  typing/datarepr.cmo typing/cmi_format.cmo typing/env.cmo \
   typing/typedtree.cmo typing/ctype.cmo \
   typing/printtyp.cmo typing/includeclass.cmo \
   typing/mtype.cmo typing/includecore.cmo \
@@ -66,7 +66,8 @@ COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
 BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   bytecomp/printinstr.cmo bytecomp/opcodes.cmo bytecomp/emitcode.cmo \
   bytecomp/bytesections.cmo bytecomp/dll.cmo bytecomp/symtable.cmo \
-  bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo
+  bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo \
+  bytecomp/bytefunctorize.cmo
 
 ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
@@ -82,7 +83,8 @@ ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
   asmcomp/printlinear.cmo asmcomp/linearize.cmo \
   asmcomp/schedgen.cmo asmcomp/scheduling.cmo \
   asmcomp/emitaux.cmo asmcomp/emit.cmo asmcomp/asmgen.cmo \
-  asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo
+  asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
+  asmcomp/asmfunctorize.cmo
 
 DRIVER=driver/pparse.cmo driver/errors.cmo driver/compile.cmo \
   driver/main_args.cmo driver/main.cmo
@@ -546,7 +548,7 @@ beforedepend:: asmcomp/emit.ml
 
 tools/cvt_emit: tools/cvt_emit.mll
 	cd tools; \
-	$(MAKE) CAMLC="../$(CAMLRUN) ../boot/ocamlc -I ../stdlib" cvt_emit
+	$(MAKE) CAMLC="../$(CAMLRUN) ../boot/ocamlc -I ../boot" cvt_emit
 
 # The "expunge" utility
 

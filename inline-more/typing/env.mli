@@ -20,6 +20,10 @@ type t
 
 val empty: t
 val initial: t
+val add_functor_arguments : string -> unit
+val functor_args : unit -> (Ident.t * Digest.t) list
+val functor_parts : unit -> Ident.t list
+val get_functor_part : string -> Ident.t
 val diff: t -> t -> Ident.t list
 
 (* Lookup by paths *)
@@ -90,6 +94,8 @@ val set_unit_name: string -> unit
 (* Read, save a signature to/from a file *)
 
 val read_signature: string -> string -> signature
+val read_signature_and_args: string -> string ->
+  signature * (Ident.t * Digest.t) list
         (* Arguments: module name, file name. Results: signature. *)
 val save_signature: signature -> string -> string -> unit
         (* Arguments: signature, module name, file name. *)
@@ -133,6 +139,7 @@ type error =
   | Corrupted_interface of string
   | Illegal_renaming of string * string
   | Inconsistent_import of string * string * string
+  | Inconsistent_argument of string * string
   | Need_recursive_types of string * string
 
 exception Error of error

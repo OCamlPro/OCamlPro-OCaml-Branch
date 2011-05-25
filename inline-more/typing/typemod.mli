@@ -33,7 +33,8 @@ val check_nongen_schemes:
 val simplify_signature: signature -> signature
 
 val package_units:
-        string list -> string -> string -> Typedtree.module_coercion
+  string list -> string -> string -> Ident.t option ->
+    Typedtree.module_coercion * (Ident.t * Ident.t) option * (Ident.t * Digest.t) list
 
 type error =
     Cannot_apply of module_type
@@ -53,6 +54,9 @@ type error =
   | With_need_typeconstr
   | Not_a_packed_module of type_expr
   | Incomplete_packed_module of type_expr
+  | Inconsistent_functor_arguments of string * string
+  | No_functor_argument
+  | Functor_argument_not_found of string
 
 exception Error of Location.t * error
 

@@ -125,6 +125,8 @@ module Options = Main_args.Make_optcomp_options (struct
   let _output_obj = set output_c_object
   let _p = set gprofile
   let _pack = set make_package
+  let _pack_functor s = pack_functor := Some s
+  let _functor s = functors := s :: !functors
   let _pp s = preprocessor := Some s
   let _principal = set principal
   let _rectypes = set recursive_types
@@ -214,4 +216,12 @@ let main () =
     Opterrors.report_error ppf x;
     exit 2
 
-let _ = main ()
+
+let _ =
+  try
+    main ()
+  with e ->
+    let s = Printexc.get_backtrace () in
+    Printf.fprintf stderr "Fatal error: %s\n%!" (Printexc.to_string e);
+    Printf.fprintf stderr "%s%!" s;
+    exit 2

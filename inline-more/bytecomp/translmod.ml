@@ -345,13 +345,31 @@ let _ =
 
 (* Compile an implementation *)
 
+
+let transl_functor_unit modname str =
+  let ids = Env.functor_parts () in
+  let functor_env = Ident.create "functor_env" in
+  let str = List.fold_left (fun str id ->
+    if Ident.name id = modname then str else
+      Llet(Strict, id,
+	 Lapply(mod_prim "find_functor_arg", [
+	   Lconst(Const_base (Const_string (Ident.name id)));
+	   Lvar functor_env;
+	 ], Location.none), str)
+  ) str ids
+  in
+  Lprim(Pmakeblock(0, Immutable),
+	[Lfunction(Curried, [ functor_env ], str)])
+
 let transl_implementation module_name (str, cc) =
   reset_labels ();
   primitive_declarations := [];
   let module_id = Ident.create_persistent module_name in
+  let str = transl_label_init (transl_structure [] cc (global_path module_id) str) in
   Lprim(Psetglobal module_id,
-        [transl_label_init
-            (transl_structure [] cc (global_path module_id) str)])
+	[if !Clflags.functors <> [] then
+	  transl_functor_unit module_name str
+	else str])
 
 
 (* Build the list of value identifiers defined by a toplevel structure
@@ -551,6 +569,7 @@ let transl_store_structure glob map prims str =
   in List.fold_right store_primitive prims (transl_store (global_path glob) !transl_store_subst str)
 
 
+
 (* Transform a coercion and the list of value identifiers defined by
    a toplevel structure into a table [id -> (pos, coercion)],
    with [pos] being the position in the global block where the value of
@@ -597,6 +616,8 @@ let transl_store_gen module_name (str, restr) topl =
   reset_labels ();
   primitive_declarations := [];
   let module_id = Ident.create_persistent module_name in
+  if !Clflags.functors <> [] then
+    Ident.make_functor_part module_id;
   let (map, prims, size) = build_ident_map restr (defined_idents str) (more_idents str) in
   let f = function
     | [ Tstr_eval expr ] when topl ->
@@ -614,7 +635,15 @@ let transl_store_implementation module_name (str, restr) =
   transl_store_subst := Ident.empty;
   let r = transl_store_gen module_name (str, restr) false in
   transl_store_subst := s;
-  r
+  if !Clflags.functors <> [] then
+    let (size, str) = r in
+    let id = Env.get_functor_part module_name in
+    let str = Llet(Strict, id,
+		   Lprim(Pmakeblock(0, Immutable), Array.to_list (Array.create size lambda_unit)),
+		   Lsequence (str, Lvar id) ) in
+    let str = transl_functor_unit module_name str in
+    (size, str)
+  else r
 
 (* Compile a toplevel phrase *)
 
@@ -718,19 +747,87 @@ let get_component = function
     None -> Lconst const_unit
   | Some id -> Lprim(Pgetglobal id, [])
 
-let transl_package component_names target_name coercion =
-  let components =
-    match coercion with
-      Tcoerce_none ->
-        List.map get_component component_names
-    | Tcoerce_structure pos_cc_list ->
-        let g = Array.of_list component_names in
-        List.map
-          (fun (pos, cc) -> apply_coercion cc (get_component g.(pos)))
-          pos_cc_list
-    | _ ->
-        assert false in
-  Lprim(Psetglobal target_name, [Lprim(Pmakeblock(0, Immutable), components)])
+let const_string s =
+  Lconst(Const_base (Const_string s))
+
+let const_pack_unit_name id =
+  let name = Ident.name id in
+  let name = try
+	       let pos = String.rindex name '.' in
+	       String.sub name (pos+1) (String.length name - pos - 1)
+    with Not_found -> name
+  in
+  const_string name
+
+
+let transl_package component_names target_name coercion functor_info =
+  match functor_info with
+      None ->
+	let components =
+	  match coercion with
+	      Tcoerce_none ->
+		List.map get_component component_names
+	    | Tcoerce_structure pos_cc_list ->
+              let g = Array.of_list component_names in
+              List.map
+		(fun (pos, cc) -> apply_coercion cc (get_component g.(pos)))
+		pos_cc_list
+	    | _ ->
+              assert false in
+	Lprim(Psetglobal target_name, [Lprim(Pmakeblock(0, Immutable), components)])
+    | Some (functor_id, functor_arg) ->
+
+      let env0_id = Ident.create "functor_env0" in
+      let env1_id = Ident.create "functor_env1" in
+      let rec eval_components env comps evaluated =
+	match comps with
+	    [] ->
+	      let component_names = List.rev evaluated in
+	      let components =
+		match coercion with
+		    Tcoerce_none ->
+		      component_names
+		  | Tcoerce_structure pos_cc_list ->
+		    let g = Array.of_list component_names in
+		    List.map
+		      (fun (pos, cc) -> apply_coercion cc (g.(pos)))
+		      pos_cc_list
+		  | _ ->
+		    assert false in
+	      Lprim(Pmakeblock(0, Immutable), components)
+	  | None :: tail ->
+	    eval_components env tail evaluated
+	  | Some comp :: tail ->
+	    let comp_id = Ident.create (Ident.name comp) in
+	    let newenv = Ident.create "env" in
+	    Llet(Strict,
+		 comp_id, Lapply(
+		   Lprim(Pfield 0, [Lprim(Pgetglobal comp, [])]),
+		   [Lvar env], Location.none),
+		 Llet(Strict,
+		      newenv, Lapply(mod_prim "add_functor_arg",
+				     [const_pack_unit_name comp;
+				      Lvar comp_id; Lvar env], Location.none),
+		      eval_components newenv tail (Lvar comp_id :: evaluated)))
+      in
+      let components = eval_components env1_id component_names [] in
+      let functor_body =
+	Llet(Strict, env0_id,
+	     Lapply(mod_prim "create_functor_env",[lambda_unit], Location.none),
+	     Llet(Strict, env1_id,
+		  Lapply(mod_prim "add_functor_arg",
+			 [const_pack_unit_name functor_arg; Lvar functor_arg; Lvar env0_id],
+			 Location.none),
+		  components))
+      in
+
+	Llet(Strict, functor_id,
+	     Lfunction(Curried, [functor_arg], functor_body),
+	     Lprim(Psetglobal target_name,
+		   [Lprim(Pmakeblock(0, Immutable), [Lvar functor_id])]))
+
+(* [Lprim(Pmakeblock(0, Immutable), components)]) *)
+
 
 let transl_store_package component_names target_name coercion =
   let rec make_sequence fn pos arg =

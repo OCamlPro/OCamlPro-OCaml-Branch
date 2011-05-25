@@ -205,7 +205,7 @@ let (msg_file, msg_line, msg_chars, msg_to, msg_colon, msg_head) =
 (* return file, line, char from the given position *)
 let get_pos_info pos =
   let (filename, linenum, linebeg) =
-    if pos.pos_fname = "" && !input_name = "" then
+    if pos.pos_fname = "" && (!input_name = "" || !input_name = "_none_") then
       ("", -1, 0)
     else if pos.pos_fname = "" then
       Linenum.for_position !input_name pos.pos_cnum

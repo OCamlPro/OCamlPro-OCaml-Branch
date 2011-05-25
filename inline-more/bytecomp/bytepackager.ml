@@ -155,7 +155,12 @@ let rec rename_append_bytecode_list oc mapping defined ofs prefix subst = functi
 
 (* Generate the code that builds the tuple representing the package module *)
 
-let build_global_target oc target_name members mapping pos coercion =
+let print_if ppf flag printer arg =
+  if !flag then Format.fprintf ppf "%a@." printer arg
+
+let ppf = Format.err_formatter
+
+let build_global_target oc target_name members mapping pos coercion functor_info =
   let components =
     List.map2
       (fun m (id1, id2) ->
@@ -165,16 +170,19 @@ let build_global_target oc target_name members mapping pos coercion =
       members mapping in
   let lam =
     Translmod.transl_package
-      components (Ident.create_persistent target_name) coercion in
+      components (Ident.create_persistent target_name) coercion functor_info in
+  print_if ppf Clflags.dump_lambda Printlambda.lambda lam;
+  print_if ppf Clflags.dump_rawlambda Printlambda.lambda lam;
   let instrs =
     Bytegen.compile_implementation target_name lam in
+  print_if ppf Clflags.dump_instr Printinstr.instrlist instrs;
   let rel =
     Emitcode.to_packed_file oc instrs in
   relocs := List.map (fun (r, ofs) -> (r, pos + ofs)) rel @ !relocs
 
 (* Build the .cmo file obtained by packaging the given .cmo files. *)
 
-let package_object_files files targetfile targetname coercion =
+let package_object_files files targetfile targetname coercion (functor_info, functor_args) =
   let members =
     map_left_right read_member_info files in
   let unit_names =
@@ -192,7 +200,7 @@ let package_object_files files targetfile targetname coercion =
     output_binary_int oc 0;
     let pos_code = pos_out oc in
     let ofs = rename_append_bytecode_list oc mapping [] 0 targetname Subst.identity members in
-    build_global_target oc targetname members mapping ofs coercion;
+    build_global_target oc targetname members mapping ofs coercion functor_info;
     let pos_debug = pos_out oc in
     if !Clflags.debug && !events <> [] then
       output_value oc (List.rev !events);
@@ -210,6 +218,8 @@ let package_object_files files targetfile targetname coercion =
         cu_primitives = !primitives;
         cu_force_link = !force_link;
         cu_debug = if pos_final > pos_debug then pos_debug else 0;
+	cu_functor_parts = []; (* TODO : add functor parts from submodules *)
+	cu_functor_args = functor_args;
         cu_debugsize = pos_final - pos_debug } in
     output_value oc compunit;
     seek_out oc pos_depl;
@@ -221,7 +231,7 @@ let package_object_files files targetfile targetname coercion =
 
 (* The entry point *)
 
-let package_files files targetfile =
+let package_files files targetfile functor_name =
   let files =
     List.map
       (fun f ->
@@ -231,9 +241,14 @@ let package_files files targetfile =
   let prefix = chop_extensions targetfile in
   let targetcmi = prefix ^ ".cmi" in
   let targetname = String.capitalize(Filename.basename prefix) in
+  let functor_id = match functor_name with
+      None -> None
+    | Some modname -> Some (Ident.create modname) in
   try
-    let coercion = Typemod.package_units files targetcmi targetname in
-    package_object_files files targetfile targetname coercion
+    let (coercion, functor_info, functor_args) =
+      Typemod.package_units files targetcmi targetname functor_id in
+    package_object_files files targetfile targetname coercion (functor_info, functor_args)
+
   with x ->
     remove_file targetfile; raise x
 

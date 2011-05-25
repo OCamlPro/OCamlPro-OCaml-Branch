@@ -42,9 +42,10 @@ let init_path () =
 let initial_env () =
   Ident.reinit();
   try
+    let env = Env.initial in
     if !Clflags.nopervasives
-    then Env.initial
-    else Env.open_pers_signature "Pervasives" Env.initial
+    then env
+    else Env.open_pers_signature "Pervasives" env
   with Not_found ->
     fatal_error "cannot open pervasives.cmi"
 
@@ -83,6 +84,7 @@ let interface ppf sourcefile outputprefix =
     let ast =
       Pparse.file ppf inputfile Parse.interface ast_intf_magic_number in
     if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
+    Env.add_functor_arguments modulename;
     let sg = Typemod.transl_signature (initial_env()) ast in
     if !Clflags.print_types then
       fprintf std_formatter "%a@." Printtyp.signature
@@ -111,6 +113,7 @@ let implementation ppf sourcefile outputprefix =
   check_unit_name ppf sourcefile modulename;
   Env.set_unit_name modulename;
   let inputfile = Pparse.preprocess sourcefile in
+  Env.add_functor_arguments modulename;
   let env = initial_env() in
   if !Clflags.print_types then begin
     try ignore(

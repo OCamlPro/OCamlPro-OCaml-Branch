@@ -192,6 +192,12 @@ let mk_pack_opt f =
   "-pack", Arg.Unit f, " Package the given .cmx files into one .cmx"
 ;;
 
+let mk_functor f =
+  "-functor", Arg.String f, " <file.mli> : signature of functor argument"
+
+let mk_pack_functor f =
+  "-pack-functor", Arg.String f, "<modname> : name of functor"
+
 let mk_pp f =
   "-pp", Arg.String f, "<command>  Pipe sources through preprocessor <command>"
 ;;
@@ -403,6 +409,8 @@ module type Bytecomp_options = sig
   val _o : string -> unit
   val _output_obj : unit -> unit
   val _pack : unit -> unit
+  val _pack_functor : string -> unit
+  val _functor : string -> unit
   val _pp : string -> unit
   val _principal : unit -> unit
   val _rectypes : unit -> unit
@@ -486,6 +494,8 @@ module type Optcomp_options = sig
   val _output_obj : unit -> unit
   val _p : unit -> unit
   val _pack : unit -> unit
+  val _pack_functor : string -> unit
+  val _functor : string -> unit
   val _pp : string -> unit
   val _principal : unit -> unit
   val _rectypes : unit -> unit
@@ -607,6 +617,8 @@ struct
     mk_o F._o;
     mk_output_obj F._output_obj;
     mk_pack_byt F._pack;
+    mk_pack_functor F._pack_functor;
+    mk_functor F._functor;
     mk_pp F._pp;
     mk_principal F._principal;
     mk_rectypes F._rectypes;
@@ -698,6 +710,8 @@ struct
     mk_output_obj F._output_obj;
     mk_p F._p;
     mk_pack_opt F._pack;
+    mk_pack_functor F._pack_functor;
+    mk_functor F._functor;
     mk_pp F._pp;
     mk_principal F._principal;
     mk_rectypes F._rectypes;

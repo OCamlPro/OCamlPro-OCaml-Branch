@@ -41,9 +41,13 @@ let rec build_closure_env env_param pos = function
    and no longer in Cmmgen so that approximations stored in .cmx files
    contain the right names if the -for-pack option is active. *)
 
-let getglobal id =
-  Uprim(Pgetglobal (Ident.create_persistent (Compilenv.symbol_for_global id)),
-        [], Debuginfo.none)
+let getglobal cenv id =
+  if Ident.functor_part id then
+    let id = Env.get_functor_part (Ident.name id) in
+    try Tbl.find id cenv with Not_found -> Uvar id
+  else
+    Uprim(Pgetglobal (Ident.create_persistent (Compilenv.symbol_for_global id)),
+          [], Debuginfo.none)
 
 (* Check if a variable occurs in a [clambda] term. *)
 
@@ -595,7 +599,7 @@ let rec close fenv cenv = function
       end
   | Lprim(Pgetglobal id, []) as lam ->
       check_constant_result lam
-                            (getglobal id)
+                            (getglobal cenv id)
                             (Compilenv.global_approx id)
   | Lprim(Pmakeblock(tag, mut) as prim, lams) ->
       let (ulams, approxs) = List.split (List.map (close fenv cenv) lams) in
@@ -614,7 +618,7 @@ let rec close fenv cenv = function
   | Lprim(Psetfield(n, _), [Lprim(Pgetglobal id, []); lam]) ->
       let (ulam, approx) = close fenv cenv lam in
       (!global_approx).(n) <- approx;
-      (Uprim(Psetfield(n, false), [getglobal id; ulam], Debuginfo.none),
+      (Uprim(Psetfield(n, false), [getglobal cenv id; ulam], Debuginfo.none),
        Value_unknown)
   | Lprim(Praise, [Levent(arg, ev)]) ->
       let (ulam, approx) = close fenv cenv arg in
@@ -830,4 +834,13 @@ let intro size lam =
   Compilenv.set_global_approx(Value_tuple !global_approx);
   let (ulam, approx) = close Tbl.empty Tbl.empty lam in
   global_approx := [||];
-  ulam
+  if !Clflags.functors <> [] then begin
+    (1,
+     Uprim(Psetfield(0, false), [
+           Uprim(Pgetglobal (Ident.create_persistent (Compilenv.symbol_for_global
+							(Ident.create_persistent (Compilenv.current_unit_name ())))),
+		 [], Debuginfo.none);
+       ulam], Debuginfo.none)
+    )
+  end else
+    (size, ulam)

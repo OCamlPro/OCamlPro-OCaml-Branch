@@ -93,3 +93,7 @@ let std_include_dir () =
 
 let shared = ref false (* -shared *)
 let dlcode = ref true (* not -nodynlink *)
+
+
+let pack_functor = ref None (* module name of functor *)
+let functors = ref []       (* list of interface files, used as functor argument spec *)

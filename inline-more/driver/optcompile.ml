@@ -39,9 +39,10 @@ let init_path () =
 let initial_env () =
   Ident.reinit();
   try
+    let env = Env.initial in
     if !Clflags.nopervasives
-    then Env.initial
-    else Env.open_pers_signature "Pervasives" Env.initial
+    then env
+    else Env.open_pers_signature "Pervasives" env
   with Not_found ->
     fatal_error "cannot open pervasives.cmi"
 
@@ -80,6 +81,7 @@ let interface ppf sourcefile outputprefix =
     let ast =
       Pparse.file ppf inputfile Parse.interface ast_intf_magic_number in
     if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
+    Env.add_functor_arguments modulename;
     let sg = Typemod.transl_signature (initial_env()) ast in
     if !Clflags.print_types then
       fprintf std_formatter "%a@." Printtyp.signature
@@ -112,6 +114,7 @@ let implementation ppf sourcefile outputprefix =
   Env.set_unit_name modulename;
   let inputfile = Pparse.preprocess sourcefile in
   let env = initial_env() in
+  Env.add_functor_arguments modulename;
   Compilenv.reset ?packname:!Clflags.for_package modulename;
   let cmxfile = outputprefix ^ ".cmx" in
   let objfile = outputprefix ^ ext_obj in
@@ -137,6 +140,7 @@ let implementation ppf sourcefile outputprefix =
     Pparse.remove_preprocessed inputfile;
     Stypes.dump (outputprefix ^ ".annot");
   with x ->
+    Printexc.print_backtrace stderr;
     remove_file objfile;
     remove_file cmxfile;
     Pparse.remove_preprocessed_if_ast inputfile;

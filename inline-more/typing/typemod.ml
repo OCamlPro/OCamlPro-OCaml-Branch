@@ -41,6 +41,9 @@ type error =
   | With_need_typeconstr
   | Not_a_packed_module of type_expr
   | Incomplete_packed_module of type_expr
+  | Inconsistent_functor_arguments of string * string
+  | No_functor_argument
+  | Functor_argument_not_found of string
 
 exception Error of Location.t * error
 
@@ -69,7 +72,7 @@ let rm node =
   node
 
 (* Forward declaration, to be filled in by type_module_type_of *)
-let type_module_type_of_fwd 
+let type_module_type_of_fwd
   : (Env.t -> Parsetree.module_expr -> module_type) ref
   = ref (fun env m -> assert false)
 
@@ -643,7 +646,7 @@ let modtype_of_package env loc p nl tl =
       let sg' =
         List.map
           (function
-              Tsig_type (id, ({type_params=[]} as td), rs) 
+              Tsig_type (id, ({type_params=[]} as td), rs)
               when List.mem (Ident.name id) nl ->
                 let ty = List.assoc (Ident.name id) ntl in
                 Tsig_type (id, {td with type_manifest = Some ty}, rs)
@@ -1077,25 +1080,81 @@ let rec package_signatures subst = function
       Tsig_module(newid, Tmty_signature sg', Trec_not) ::
       package_signatures (Subst.add_module oldid (Pident newid) subst) rem
 
-let package_units objfiles cmifile modulename =
+let package_units objfiles cmifile modulename functor_id =
   (* Read the signatures of the units *)
+  let needed_impl = ref Tbl.empty in
+  let provided_impl = ref Tbl.empty in
+  let functor_args = ref None in
   let units =
     List.map
       (fun f ->
          let pref = chop_extensions f in
          let modname = String.capitalize(Filename.basename pref) in
-         let sg = Env.read_signature modname (pref ^ ".cmi") in
-         if Filename.check_suffix f ".cmi" &&
-            not(Mtype.no_code_needed_sig Env.initial sg)
-         then raise(Error(Location.none, Implementation_is_required f));
-         (modname, Env.read_signature modname (pref ^ ".cmi")))
+         let (sg, fargs) =
+	   Env.read_signature_and_args modname (pref ^ ".cmi") in
+         if Filename.check_suffix f ".cmi" then begin
+	   if not(Mtype.no_code_needed_sig Env.initial sg)
+           then needed_impl := Tbl.add modname f !needed_impl
+	 end else
+	   provided_impl := Tbl.remove modname !provided_impl;
+
+	 begin match !functor_args with
+	     None -> functor_args := Some (f, fargs)
+	   | Some (f1, fargs1) ->
+	     if fargs1 <> fargs then
+	       raise (Error(Location.none,
+			    Inconsistent_functor_arguments(f1, f)));
+	 end;
+(* TODO: fix the double read of the signature in the trunk *)
+         (modname, sg))
       objfiles in
+  Tbl.iter (fun modname f ->
+    if not (Tbl.mem modname !provided_impl) then
+      raise(Error(Location.none, Implementation_is_required f));
+    ) !needed_impl;
+  let (functor_args, functor_info) =
+    match !functor_args, functor_id with
+	None, None -> ([], None)
+      | Some (_, fargs), None -> (fargs, None)
+      | (None | Some (_, [])), Some id ->
+	raise (Error (Location.none, No_functor_argument))
+      | Some (_, (arg,_) :: fargs), Some id ->
+	let newarg = Ident.create (Ident.name arg) in
+	(fargs, Some (id, arg, newarg))
+  in
   (* Compute signature of packaged unit *)
   Ident.reinit();
-  let sg = package_signatures Subst.identity units in
+  let subst = Subst.identity in
+  let (subst, functor_info) = match functor_info with
+      None -> (subst, None)
+    | Some (functor_id, functor_oldarg, functor_newarg) ->
+      let subst = Subst.add_module functor_oldarg (Pident functor_newarg) subst in
+      (subst, Some (functor_id, functor_newarg))
+  in
+  let sg = package_signatures subst units in
+  let sg = match functor_info with
+      None -> sg
+    | Some (functor_id, functor_arg_id) ->
+      let functor_arg_name = Ident.name functor_arg_id in
+      let functor_arg_file =
+        try
+          find_in_path_uncap !Config.load_path (functor_arg_name ^ ".cmi")
+        with Not_found ->
+	  raise (Error(Location.none, Functor_argument_not_found functor_arg_name))
+      in
+      let functor_arg_sg = Env.read_signature functor_arg_name functor_arg_file
+      in
+      [
+	Tsig_module(functor_id,
+		    Tmty_functor(functor_arg_id,
+				 Tmty_signature functor_arg_sg,
+				 Tmty_signature sg), Trec_not)
+      ]
+  in
   (* See if explicit interface is provided *)
   let mlifile =
     chop_extension_if_any cmifile ^ !Config.interface_suffix in
+  let cc =
   if Sys.file_exists mlifile then begin
     if not (Sys.file_exists cmifile) then begin
       raise(Error(Location.in_file mlifile, Interface_not_compiled mlifile))
@@ -1113,6 +1172,8 @@ let package_units objfiles cmifile modulename =
     Env.save_signature_with_imports sg modulename cmifile imports;
     Tcoerce_none
   end
+  in
+  (cc, functor_info, functor_args)
 
 (* Error report *)
 
@@ -1184,3 +1245,12 @@ let report_error ppf = function
       fprintf ppf
         "The type of this packed module contains variables:@ %a"
         type_expr ty
+  | Inconsistent_functor_arguments (f1, f2) ->
+      fprintf ppf
+        "Files %s and %s make inconsistent assumptions on their arguments"
+        f1 f2
+  | No_functor_argument ->
+    fprintf ppf "Cannot build a functor with toplevel modules"
+  | Functor_argument_not_found s ->
+    fprintf ppf "Compiled interface for functor argument %s could not be found"
+      s

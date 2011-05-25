@@ -15,7 +15,7 @@
 (* "Package" a set of .cmo files into one .cmo file having the
    original compilation units as sub-modules. *)
 
-val package_files: string list -> string -> unit
+val package_files: string list -> string -> string option -> unit
 
 type error =
     Forward_reference of string * Ident.t

@@ -27,6 +27,7 @@ type error =
   | Corrupted_interface of string
   | Illegal_renaming of string * string
   | Inconsistent_import of string * string * string
+  | Inconsistent_argument of string * string
   | Need_recursive_types of string * string
 
 exception Error of error
@@ -134,9 +135,18 @@ let check_modtype_inclusion =
 
 let current_unit = ref ""
 
+let functor_args = ref ([] : (Ident.t * Digest.t) list)
+let functor_arg_crcs = (Hashtbl.create 17 : (string, Digest.t * string) Hashtbl.t)
+let functor_parts = (Hashtbl.create 17 : (string, Ident.t) Hashtbl.t)
+
 (* Persistent structure descriptions *)
 
-type pers_flags = Rectypes
+(* type pers_flags = Rectypes moved to Cmi_format *)
+
+type ps_kind =
+    PersistentStructureDependency
+  | PersistentStructureArgument
+  | PersistentStructureUnit
 
 type pers_struct =
   { ps_name: string;
@@ -144,10 +154,14 @@ type pers_struct =
     ps_comps: module_components;
     ps_crcs: (string * Digest.t) list;
     ps_filename: string;
-    ps_flags: pers_flags list }
+    ps_flags: Cmi_format.pers_flags list;
+    ps_id : Ident.t;
+    ps_kind : ps_kind;
+    ps_crc : Digest.t;
+    ps_functor_args : (Ident.t * Digest.t) list;
+ }
 
-let persistent_structures =
-  (Hashtbl.create 17 : (string, pers_struct) Hashtbl.t)
+let persistent_structures = (Hashtbl.create 17 : (string, pers_struct) Hashtbl.t)
 
 (* Consistency between persistent structures *)
 
@@ -161,9 +175,46 @@ let check_consistency filename crcs =
   with Consistbl.Inconsistency(name, source, auth) ->
     raise(Error(Inconsistent_import(name, auth, source)))
 
+let check_functor_args filename crcs =
+  List.iter
+    (fun (id, crc) ->
+      let id = Ident.name id in
+      try
+	let (crc2, auth) = Hashtbl.find functor_arg_crcs id in
+	if crc <> crc2 then
+	  raise (Error (Inconsistent_import (id, filename, auth)))
+      with Not_found ->
+	raise(Error(Inconsistent_argument(id, filename)))
+    )
+    crcs
+
 (* Reading persistent structures from .cmi files *)
 
-let read_pers_struct modname filename =
+open Cmi_format
+
+(* TODO: check the case where two modules have inconsistent
+   assumptions on a module: one uses it as an argument, the other one as
+   a dependency. This should fail. *)
+
+let add_functor_part id =
+  Ident.make_functor_part id;
+  let name = Ident.name id in
+  Hashtbl.add functor_parts name (Ident.create name)
+
+let get_functor_part name = Hashtbl.find functor_parts name
+
+let functor_parts () =
+  let list = ref [] in
+  Hashtbl.iter (fun _ id -> list := id :: !list) functor_parts;
+  !list
+
+let read_pers_struct modname filename ps_kind =
+  Printf.fprintf stderr "Read_Pers_Struct %s %s\n%!" filename
+    (match ps_kind with
+	PersistentStructureArgument -> "(functor argument)"
+      | PersistentStructureDependency -> ""
+      | PersistentStructureUnit -> "(functor unit)"
+    );
   let ic = open_in_bin filename in
   try
     let buffer = String.create (String.length cmi_magic_number) in
@@ -172,23 +223,36 @@ let read_pers_struct modname filename =
       close_in ic;
       raise(Error(Not_an_interface filename))
     end;
-    let (name, sign) = input_value ic in
-    let crcs = input_value ic in
-    let flags = input_value ic in
+    let (cmi, crc) = Cmi_format.input_cmi_info ic in
     close_in ic;
+    let ps_id = Ident.create_persistent cmi.cmi_name in
+    begin
+      match ps_kind with
+	| PersistentStructureArgument -> add_functor_part ps_id
+	| PersistentStructureDependency ->
+	  if cmi.cmi_functor_args <> [] then add_functor_part ps_id
+	| PersistentStructureUnit -> ()
+    end;
     let comps =
       !components_of_module' empty Subst.identity
-                             (Pident(Ident.create_persistent name))
-                             (Tmty_signature sign) in
-    let ps = { ps_name = name;
-               ps_sig = sign;
+        (Pident ps_id)
+        (Tmty_signature cmi.cmi_sig) in
+    let ps = { ps_name = cmi.cmi_name;
+               ps_sig = cmi.cmi_sig;
                ps_comps = comps;
-               ps_crcs = crcs;
+               ps_crcs = (cmi.cmi_name, crc) :: cmi.cmi_crcs;
+	       ps_crc = crc;
                ps_filename = filename;
-               ps_flags = flags } in
+               ps_flags = cmi.cmi_flags;
+	       ps_kind = ps_kind;
+	       ps_id = ps_id;
+	       ps_functor_args = cmi.cmi_functor_args;
+	     } in
     if ps.ps_name <> modname then
       raise(Error(Illegal_renaming(ps.ps_name, filename)));
     check_consistency filename ps.ps_crcs;
+    if ps_kind <> PersistentStructureUnit then
+      check_functor_args filename ps.ps_functor_args;
     List.iter
       (function Rectypes ->
         if not !Clflags.recursive_types then
@@ -201,10 +265,12 @@ let read_pers_struct modname filename =
     raise(Error(Corrupted_interface(filename)))
 
 let find_pers_struct name =
+(*  Printf.fprintf stderr "find_pers_struct %s\n%!" name; *)
   try
     Hashtbl.find persistent_structures name
   with Not_found ->
     read_pers_struct name (find_in_path_uncap !load_path (name ^ ".cmi"))
+      PersistentStructureDependency
 
 let reset_cache () =
   current_unit := "";
@@ -225,7 +291,10 @@ let rec find_module_descr path env =
       with Not_found ->
         if Ident.persistent id
         then (find_pers_struct (Ident.name id)).ps_comps
-        else raise Not_found
+        else begin
+	  Printf.fprintf stderr "Non persistent ident %s not found\n%!" (Ident.unique_name id);
+	  raise Not_found
+	end
       end
   | Pdot(p, s, pos) ->
       begin match Lazy.force(find_module_descr p env) with
@@ -311,7 +380,10 @@ let find_module path env =
         if Ident.persistent id then
           let ps = find_pers_struct (Ident.name id) in
           Tmty_signature(ps.ps_sig)
-        else raise Not_found
+        else begin
+	  Printf.fprintf stderr "Non persistent ident %s not found\n%!" (Ident.unique_name id);
+	  raise Not_found
+	end
       end
   | Pdot(p, s, pos) ->
       begin match Lazy.force (find_module_descr p env) with
@@ -332,8 +404,9 @@ let rec lookup_module_descr lid env =
         Ident.find_name s env.components
       with Not_found ->
         if s = !current_unit then raise Not_found;
+	Printf.fprintf stderr "lookup_module_descr %s\n%!" s;
         let ps = find_pers_struct s in
-        (Pident(Ident.create_persistent s), ps.ps_comps)
+        (Pident ps.ps_id, ps.ps_comps)
       end
   | Ldot(l, s) ->
       let (p, descr) = lookup_module_descr l env in
@@ -362,8 +435,10 @@ and lookup_module lid env =
         Ident.find_name s env.modules
       with Not_found ->
         if s = !current_unit then raise Not_found;
+	Printf.fprintf stderr "lookup_module %s\n%!" s;
         let ps = find_pers_struct s in
-        (Pident(Ident.create_persistent s), Tmty_signature ps.ps_sig)
+	Printf.fprintf stderr "found module %s with ident %s\n%!" s (Ident.unique_name ps.ps_id);
+        (Pident ps.ps_id, Tmty_signature ps.ps_sig)
       end
   | Ldot(l, s) ->
       let (p, descr) = lookup_module_descr l env in
@@ -782,12 +857,19 @@ let open_signature root sg env =
 
 let open_pers_signature name env =
   let ps = find_pers_struct name in
-  open_signature (Pident(Ident.create_persistent name)) ps.ps_sig env
+  open_signature (Pident ps.ps_id) ps.ps_sig env
 
 (* Read a signature from a file *)
 
 let read_signature modname filename =
-  let ps = read_pers_struct modname filename in ps.ps_sig
+(*  Printf.fprintf stderr "read_signature %s\n%!" modname; *)
+  let ps = read_pers_struct modname filename PersistentStructureDependency in
+  ps.ps_sig
+
+let read_signature_and_args modname filename =
+(*  Printf.fprintf stderr "read_signature %s\n%!" modname; *)
+  let ps = read_pers_struct modname filename PersistentStructureUnit in
+  (ps.ps_sig, ps.ps_functor_args)
 
 (* Return the CRC of the interface of the given compilation unit *)
 
@@ -812,26 +894,34 @@ let save_signature_with_imports sg modname filename imports =
   let oc = open_out_bin filename in
   try
     output_string oc cmi_magic_number;
-    output_value oc (modname, sg);
-    flush oc;
-    let crc = Digest.file filename in
-    let crcs = (modname, crc) :: imports in
-    output_value oc crcs;
-    let flags = if !Clflags.recursive_types then [Rectypes] else [] in
-    output_value oc flags;
+    let cmi = {
+      cmi_name = modname;
+      cmi_sig = sg;
+      cmi_crcs = imports;
+      cmi_functor_args = !functor_args;
+      cmi_arg_id = Ident.create modname;
+      cmi_flags = (if !Clflags.recursive_types then [Rectypes] else []);
+    } in
+    let crc = output_cmi_info oc cmi in
     close_out oc;
     (* Enter signature in persistent table so that imported_unit()
        will also return its crc *)
+    let ps_pers_id = Ident.create_persistent modname in
     let comps =
       components_of_module empty Subst.identity
-        (Pident(Ident.create_persistent modname)) (Tmty_signature sg) in
+        (Pident ps_pers_id) (Tmty_signature sg) in
     let ps =
       { ps_name = modname;
         ps_sig = sg;
         ps_comps = comps;
-        ps_crcs = crcs;
+        ps_crcs = (modname, crc) :: cmi.cmi_crcs;
+	ps_crc = crc;
         ps_filename = filename;
-        ps_flags = flags } in
+        ps_flags = cmi.cmi_flags;
+	ps_id = ps_pers_id;
+	ps_kind = PersistentStructureDependency;
+	ps_functor_args = cmi.cmi_functor_args;
+      } in
     Hashtbl.add persistent_structures modname ps;
     Consistbl.set crc_units modname crc filename
   with exn ->
@@ -843,6 +933,27 @@ let save_signature sg modname filename =
   save_signature_with_imports sg modname filename (imported_units())
 
 (* Make the initial environment *)
+
+(* TODO Add checks: identifiers loaded for functor arguments should not conflict
+with any local identifier. This is simply done in the case of persistent modules,
+as their identifier is marked persistent. This is harder:
+- for namespaces (check !!!)
+- for these local identifiers
+*)
+
+let add_functor_arguments modname =
+  add_functor_part (Ident.create_persistent modname);
+  functor_args := [];
+  List.iter (fun filename ->
+    let filename = Filename.chop_suffix filename ".mli" (* could be .cmi *) in
+    let modname = String.capitalize  (Filename.basename filename) in
+    let filename = filename ^ ".cmi" in
+    let ps = read_pers_struct modname filename PersistentStructureArgument in
+    functor_args := (ps.ps_id, ps.ps_crc) :: !functor_args;
+    Hashtbl.add functor_arg_crcs (Ident.name ps.ps_id) (ps.ps_crc, filename);
+  ) !Clflags.functors
+
+let functor_args () = !functor_args
 
 let initial = Predef.build_initial_env add_type add_exception empty
 
@@ -866,6 +977,10 @@ let report_error ppf = function
       "@[<hov>The files %s@ and %s@ \
               make inconsistent assumptions@ over interface %s@]"
       source1 source2 name
+  | Inconsistent_argument(name, source1) -> fprintf ppf
+      "@[<hov>The functor argument file %s@ \
+              has unmet dependency towards another argument %s@]"
+      source1 name
   | Need_recursive_types(import, export) ->
       fprintf ppf
         "@[<hov>Unit %s imports from %s, which uses recursive types.@ %s@]"

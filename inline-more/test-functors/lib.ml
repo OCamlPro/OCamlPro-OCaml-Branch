@@ -1,5 +1,5 @@
 module Make(X : sig
-#0 "x.mli"
+#0 "arguments/x.mli"
 
 type t
 

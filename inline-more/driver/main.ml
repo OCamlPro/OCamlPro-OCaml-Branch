@@ -116,6 +116,10 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _o s = output_name := Some s
   let _output_obj () = output_c_object := true; custom_runtime := true
   let _pack = set make_package
+  let _pack_functor s =
+    set make_package ();
+    pack_functor := Some s
+  let _functor s = functors := s :: !functors
   let _pp s = preprocessor := Some s
   let _principal = set principal
   let _rectypes = set recursive_types
@@ -174,7 +178,7 @@ let main () =
     else if !make_package then begin
       Compile.init_path();
       Bytepackager.package_files (List.rev !objfiles)
-                                 (extract_output !output_name)
+                                 (extract_output !output_name) !pack_functor
     end
     else if not !compile_only && !objfiles <> [] then begin
       let target =
@@ -201,4 +205,12 @@ let main () =
     Errors.report_error Format.err_formatter x;
     exit 2
 
-let _ = main ()
+let _ =
+  try
+    main ()
+  with e ->
+    let s = Printexc.get_backtrace () in
+    Printf.fprintf stderr "Fatal error: %s\n%!" (Printexc.to_string e);
+    Printf.fprintf stderr "%s%!" s;
+    exit 2
+

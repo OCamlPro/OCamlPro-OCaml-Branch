@@ -40,6 +40,8 @@ val hide: t -> t
 
 val make_global: t -> unit
 val global: t -> bool
+val make_functor_part: t -> unit
+val functor_part: t -> bool
 val is_predef_exn: t -> bool
 
 val binding_time: t -> int

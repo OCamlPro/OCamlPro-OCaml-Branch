@@ -41,6 +41,8 @@ module type Bytecomp_options =
     val _o : string -> unit
     val _output_obj : unit -> unit
     val _pack : unit -> unit
+    val _pack_functor : string -> unit
+    val _functor : string -> unit
     val _pp : string -> unit
     val _principal : unit -> unit
     val _rectypes : unit -> unit
@@ -125,6 +127,8 @@ module type Optcomp_options = sig
   val _output_obj : unit -> unit
   val _p : unit -> unit
   val _pack : unit -> unit
+  val _pack_functor : string -> unit
+  val _functor : string -> unit
   val _pp : string -> unit
   val _principal : unit -> unit
   val _rectypes : unit -> unit

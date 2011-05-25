@@ -66,3 +66,11 @@ let rec update_mod shape o n =
       for i = 0 to Array.length comps - 1 do
         update_mod comps.(i) (Obj.field o i) (Obj.field n i)
       done
+
+module StringMap = Map.Make(String)
+
+type functor_arg
+type functor_env = functor_arg StringMap.t
+let create_functor_env () = StringMap.empty
+let find_functor_arg = StringMap.find
+let add_functor_arg = StringMap.add

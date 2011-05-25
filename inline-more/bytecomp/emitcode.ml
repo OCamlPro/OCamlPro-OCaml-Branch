@@ -375,6 +375,8 @@ let to_file outchan unit_name code =
       cu_imports = Env.imported_units();
       cu_primitives = List.map Primitive.byte_name !Translmod.primitive_declarations;
       cu_force_link = false;
+      cu_functor_parts = List.map Ident.name (Env.functor_parts ());
+      cu_functor_args = Env.functor_args ();
       cu_debug = pos_debug;
       cu_debugsize = size_debug } in
   init();                               (* Free out_buffer and reloc_info *)
