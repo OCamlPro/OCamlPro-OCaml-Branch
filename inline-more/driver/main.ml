@@ -177,8 +177,13 @@ let main () =
     end
     else if !make_package then begin
       Compile.init_path();
-      Bytepackager.package_files (List.rev !objfiles)
-                                 (extract_output !output_name) !pack_functor
+      let target = extract_output !output_name in
+      if Filename.check_suffix target ".cmi" then
+	Typemod.package_interfaces (List.rev !objfiles)
+          target !pack_functor
+      else
+	Bytepackager.package_files (List.rev !objfiles)
+          target !pack_functor
     end
     else if not !compile_only && !objfiles <> [] then begin
       let target =

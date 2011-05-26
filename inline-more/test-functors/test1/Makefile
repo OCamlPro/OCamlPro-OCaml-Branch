@@ -1,6 +1,8 @@
-OCAMLC=../byterun/ocamlrun ../ocamlc -I ../stdlib
+ROOT=../..
+
+OCAMLC=$(ROOT)/byterun/ocamlrun $(ROOT)/ocamlc -I $(ROOT)stdlib
 # -dinstr
-OCAMLOPT=../byterun/ocamlrun ../ocamlopt -I ../stdlib -dcmm -dclosure -S
+OCAMLOPT=$(ROOT)/byterun/ocamlrun $(ROOT)/ocamlopt -I $(ROOT)/stdlib -dcmm -dclosure -S
 FUNCTOR = -functor arguments/x.mli -dlambda
 PACK_FUNCTOR = -pack-functor Make -dlambda
 
@@ -24,7 +26,7 @@ opt:
 	$(OCAMLOPT) -c test.ml
 	$(OCAMLOPT) -o test.opt lib.cmx test.cmx
 
-PACKER=	../../../../ocplib-private/src/ocp-pack/ocp-pack.byte
+PACKER=	../../$(ROOT)/ocplib-private/src/ocp-pack/ocp-pack.byte
 
 # ocamlpack can pack modules into a file as a functor. Use it to generate lib.ml
 # that will be used for testing

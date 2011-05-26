@@ -44,6 +44,7 @@ type error =
   | Inconsistent_functor_arguments of string * string
   | No_functor_argument
   | Functor_argument_not_found of string
+  | File_not_found of string
 
 exception Error of Location.t * error
 
@@ -1175,6 +1176,90 @@ let package_units objfiles cmifile modulename functor_id =
   in
   (cc, functor_info, functor_args)
 
+let package_interfaces objfiles targetfile functor_name =
+  let objfiles =
+    List.map
+      (fun f ->
+        try find_in_path !Config.load_path f
+        with Not_found -> raise(Error(Location.none, File_not_found f)))
+      objfiles in
+  let prefix = chop_extensions targetfile in
+  let targetcmi = prefix ^ ".cmi" in
+  let targetname = String.capitalize(Filename.basename prefix) in
+  let functor_id = match functor_name with
+      None -> None
+    | Some modname -> Some (Ident.create modname) in
+  try
+
+    (* Read the signatures of the units *)
+    let functor_args = ref None in
+    let units =
+      List.map
+	(fun f ->
+          let pref = chop_extensions f in
+          let modname = String.capitalize(Filename.basename pref) in
+          let (sg, fargs) = Env.read_signature_and_args modname f in
+	  begin match !functor_args with
+	      None -> functor_args := Some (f, fargs)
+	    | Some (f1, fargs1) ->
+	      if fargs1 <> fargs then
+		raise (Error(Location.none,
+			     Inconsistent_functor_arguments(f1, f)));
+	  end;
+          (modname, sg))
+	objfiles in
+  let (functor_args, functor_info) =
+    match !functor_args, functor_id with
+	None, None -> ([], None)
+      | Some (_, fargs), None -> (fargs, None)
+      | (None | Some (_, [])), Some id ->
+	raise (Error (Location.none, No_functor_argument))
+      | Some (_, (arg,_) :: fargs), Some id ->
+	let newarg = Ident.create (Ident.name arg) in
+	(fargs, Some (id, arg, newarg))
+  in
+  (* Compute signature of packaged unit *)
+  Ident.reinit();
+  let subst = Subst.identity in
+  let (subst, functor_info) = match functor_info with
+      None -> (subst, None)
+    | Some (functor_id, functor_oldarg, functor_newarg) ->
+      let subst = Subst.add_module functor_oldarg (Pident functor_newarg) subst in
+      (subst, Some (functor_id, functor_newarg))
+  in
+  let sg = package_signatures subst units in
+  let sg = match functor_info with
+      None -> sg
+    | Some (functor_id, functor_arg_id) ->
+      let functor_arg_name = Ident.name functor_arg_id in
+      let functor_arg_file =
+        try
+          find_in_path_uncap !Config.load_path (functor_arg_name ^ ".cmi")
+        with Not_found ->
+	  raise (Error(Location.none, Functor_argument_not_found functor_arg_name))
+      in
+      let functor_arg_sg = Env.read_signature functor_arg_name functor_arg_file
+      in
+      [
+	Tsig_module(functor_id,
+		    Tmty_functor(functor_arg_id,
+				 Tmty_signature functor_arg_sg,
+				 Tmty_signature sg), Trec_not)
+      ]
+  in
+
+    (* Determine imports *)
+  let unit_names = List.map fst units in
+  let imports =
+    List.filter
+      (fun (name, crc) -> not (List.mem name unit_names))
+      (Env.imported_units()) in
+    (* Write packaged signature *)
+  Env.save_signature_with_imports sg targetname targetcmi imports
+
+  with x ->
+    remove_file targetfile; raise x
+
 (* Error report *)
 
 open Printtyp
@@ -1254,3 +1339,5 @@ let report_error ppf = function
   | Functor_argument_not_found s ->
     fprintf ppf "Compiled interface for functor argument %s could not be found"
       s
+  | File_not_found file ->
+      fprintf ppf "File %s not found" file

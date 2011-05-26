@@ -187,6 +187,10 @@ let main () =
     else if !make_package then begin
       Optcompile.init_path();
       let target = extract_output !output_name in
+      if Filename.check_suffix target ".cmi" then
+	Typemod.package_interfaces (List.rev !objfiles)
+          target !pack_functor
+      else
       Asmpackager.package_files ppf (List.rev !objfiles) target !pack_functor;
     end
     else if !shared then begin
