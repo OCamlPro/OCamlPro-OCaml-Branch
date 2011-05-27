@@ -44,8 +44,6 @@ let name i = i.name
 
 let stamp i = i.stamp
 
-let unique_name i = i.name ^ "_" ^ string_of_int i.stamp
-
 let unique_toplevel_name i = i.name ^ "/" ^ string_of_int i.stamp
 
 let persistent i = (i.stamp = 0)
@@ -99,6 +97,12 @@ let print ppf i =
   | 0 -> fprintf ppf "%s!%s" i.name (if is_functor_arg i then "@" else if is_functor_part i then "$" else "")
   | -1 -> fprintf ppf "%s#" i.name
   | n -> fprintf ppf "%s/%i%s" i.name n (if global i then "g" else "")
+
+
+let unique_name i = i.name ^ "_" ^ string_of_int i.stamp ^
+  (if is_functor_arg i then "a" else "") ^
+  (if is_functor_part i then "p" else "") ^
+  (if is_functor_arg i then "g" else "")
 
 type 'a tbl =
     Empty

@@ -6,8 +6,8 @@ module Y = struct
 
 end
 
-module A = Make_a.Make(Y)
-
+module Lib = Make_a.Make(Y)
+open Lib
 open A
 
 let x = create "new" (X.create ())

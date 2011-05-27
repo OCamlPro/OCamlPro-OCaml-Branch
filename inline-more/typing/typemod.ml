@@ -1086,10 +1086,11 @@ let print_types ppf f =
 
 let rec package_signatures subst = function
     [] -> []
-  | (name, sg) :: rem ->
+  | (name, sg, parts) :: rem ->
       let sg' = Subst.signature subst sg in
-      let oldid = Ident.create_persistent name
-      and newid = Ident.create name in
+      let oldid = Ident.create_persistent name in
+      if parts <> [] then Ident.make_functor_part oldid;
+      let newid = Ident.create name in
       Tsig_module(newid, Tmty_signature sg', Trec_not) ::
       package_signatures (Subst.add_module oldid (Pident newid) subst) rem
 
@@ -1119,7 +1120,7 @@ let package_units objfiles cmifile modulename functor_id =
 			    Inconsistent_functor_arguments(f1, f)));
 	 end;
 (* TODO: fix the double read of the signature in the trunk *)
-         (modname, sg))
+         (modname, sg, f_parts))
       objfiles in
   Tbl.iter (fun modname f ->
     if not (Tbl.mem modname !provided_impl) then
@@ -1179,7 +1180,7 @@ let package_units objfiles cmifile modulename functor_id =
     Includemod.compunit "(obtained by packing)" sg mlifile dclsig
   end else begin
     (* Determine imports *)
-    let unit_names = List.map fst units in
+    let unit_names = List.map (fun (name, _, _) -> name) units in
     let imports =
       List.filter
         (fun (name, crc) -> not (List.mem name unit_names))
@@ -1221,7 +1222,7 @@ let package_interfaces objfiles targetfile functor_name =
 		raise (Error(Location.none,
 			     Inconsistent_functor_arguments(f1, f)));
 	  end;
-          (modname, sg))
+          (modname, sg, f_parts))
 	objfiles in
   let (functor_args, functor_info) =
     match !functor_args, functor_id with
@@ -1267,7 +1268,7 @@ let package_interfaces objfiles targetfile functor_name =
   in
 
     (* Determine imports *)
-  let unit_names = List.map fst units in
+  let unit_names = List.map (fun (name, _, _) -> name) units in
   let imports =
     List.filter
       (fun (name, crc) -> not (List.mem name unit_names))

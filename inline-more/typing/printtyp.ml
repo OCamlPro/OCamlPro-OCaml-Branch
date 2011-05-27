@@ -35,7 +35,7 @@ let rec longident ppf = function
 
 let unique_names = ref Ident.empty
 
-let ident_name id =
+let ident_name id = (* Ident.unique_name id *)
   try Ident.find_same id !unique_names with Not_found -> Ident.name id
 
 let add_unique id =
