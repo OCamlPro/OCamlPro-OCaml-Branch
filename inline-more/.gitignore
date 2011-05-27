@@ -335,3 +335,7 @@ tools/objinfo_helper
 asmrun/debugger.c
 debugger/dynlink.ml
 debugger/dynlink.mli
+core
+byterun/ocamlrund
+byterun/opnames.h
+ocamlbuild-mixed-boot

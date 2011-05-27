@@ -33,8 +33,8 @@ type compilation_unit =
     cu_primitives: string list;         (* Primitives declared inside *)
     mutable cu_force_link: bool;        (* Must be linked even if unref'ed *)
     mutable cu_debug: int;              (* Position of debugging info, or 0 *)
-    mutable cu_functor_parts : string list;
-    mutable cu_functor_args : (Ident.t * Digest.t) list;
+    mutable cu_functor_parts : (string * (string * Digest.t) list) list;
+    mutable cu_functor_args : (string * Digest.t) list;
     cu_debugsize: int }                 (* Length of debugging info *)
 
 (* Format of a .cmo file:

@@ -23,6 +23,7 @@ open Misc
 open Config
 open Cmo_format
 open Clambda
+open Cmi_format
 
 let input_stringlist ic len =
   let get_string_list sect len =
@@ -44,10 +45,22 @@ let print_name_crc (name, crc) =
 let print_line name =
   printf "\t%s\n" name
 
+let print_functor_infos functor_args functor_parts =
+  if functor_args <> [] then begin
+    printf "Functor args:\n";
+    List.iter print_name_crc functor_args;
+    printf "Functors parts:\n";
+    List.iter (fun (id, deps) ->
+      printf "\t%s\n" ( id);
+      List.iter (fun (id, crc) -> printf "\t\t(%s:%s)\n" (id) (Digest.to_hex crc)) deps;
+    ) functor_parts
+  end
+
 let print_cmo_infos cu =
   printf "Unit name: %s\n" cu.cu_name;
   print_string "Interfaces imported:\n";
   List.iter print_name_crc cu.cu_imports;
+  print_functor_infos cu.cu_functor_args cu.cu_functor_parts;
   printf "Uses unsafe features: ";
   match cu.cu_primitives with
     | [] -> printf "no\n"
@@ -97,10 +110,11 @@ let print_cma_infos (lib : Cmo_format.library) =
   printf "\n";
   List.iter print_cmo_infos lib.lib_units
 
-let print_cmi_infos name sign comps crcs =
-  printf "Unit name: %s\n" name;
+let print_cmi_infos cmi cmi_crc =
+  printf "Unit name: %s\n" cmi.cmi_name;
   printf "Interfaces imported:\n";
-  List.iter print_name_crc crcs
+  List.iter print_name_crc cmi.cmi_crcs;
+  print_functor_infos cmi.cmi_functor_args cmi.cmi_functor_parts
 
 let print_general_infos name crc defines cmi cmx =
   printf "Name: %s\n" name;
@@ -117,6 +131,7 @@ open Cmx_format
 let print_cmx_infos (ui, crc) =
   print_general_infos
     ui.ui_name crc ui.ui_defines ui.ui_imports_cmi ui.ui_imports_cmx;
+  print_functor_infos ui.ui_functor_args ui.ui_functor_parts;
   printf "Approximation:\n";
   Format.fprintf Format.std_formatter "  %a@." print_approx_infos ui.ui_approx;
   let pr_funs _ fns =
@@ -222,10 +237,9 @@ let dump_obj filename =
     close_in ic;
     print_cma_infos toc
   end else if magic_number = cmi_magic_number then begin
-    let (name, sign, comps) = input_value ic in
-    let crcs = input_value ic in
+    let (cmi, cmi_crc) = Cmi_format.input_cmi_info ic in
     close_in ic;
-    print_cmi_infos name sign comps crcs
+    print_cmi_infos cmi cmi_crc
   end else if magic_number = cmx_magic_number then begin
     let ui = (input_value ic : unit_infos) in
     let crc = Digest.input ic in

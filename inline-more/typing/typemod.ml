@@ -1069,6 +1069,18 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
     end
   end
 
+let module_name filename =
+  String.capitalize (Misc.chop_extensions (Filename.basename filename))
+
+let print_types ppf f =
+  let filename =
+    try find_in_path !Config.load_path f
+    with Not_found -> raise(Error(Location.none, File_not_found f))
+  in
+  let (sg,_,_) = Env.read_signature_and_args (module_name filename) filename in
+  fprintf ppf "%a@." Printtyp.signature sg
+
+
 (* "Packaging" of several compilation units into one unit
    having them as sub-modules.  *)
 
@@ -1091,7 +1103,7 @@ let package_units objfiles cmifile modulename functor_id =
       (fun f ->
          let pref = chop_extensions f in
          let modname = String.capitalize(Filename.basename pref) in
-         let (sg, fargs) =
+         let (sg, f_args, f_parts) =
 	   Env.read_signature_and_args modname (pref ^ ".cmi") in
          if Filename.check_suffix f ".cmi" then begin
 	   if not(Mtype.no_code_needed_sig Env.initial sg)
@@ -1100,9 +1112,9 @@ let package_units objfiles cmifile modulename functor_id =
 	   provided_impl := Tbl.remove modname !provided_impl;
 
 	 begin match !functor_args with
-	     None -> functor_args := Some (f, fargs)
-	   | Some (f1, fargs1) ->
-	     if fargs1 <> fargs then
+	     None -> functor_args := Some (f, f_args)
+	   | Some (f1, f_args1) ->
+	     if f_args1 <> f_args then
 	       raise (Error(Location.none,
 			    Inconsistent_functor_arguments(f1, f)));
 	 end;
@@ -1119,8 +1131,11 @@ let package_units objfiles cmifile modulename functor_id =
       | Some (_, fargs), None -> (fargs, None)
       | (None | Some (_, [])), Some id ->
 	raise (Error (Location.none, No_functor_argument))
-      | Some (_, (arg,_) :: fargs), Some id ->
-	let newarg = Ident.create (Ident.name arg) in
+      | Some (_, (name,_) :: fargs), Some id ->
+	let newarg = Ident.create name in
+	let arg = Ident.create_persistent name in
+	Ident.make_functor_arg arg;
+	Ident.make_functor_part arg;
 	(fargs, Some (id, arg, newarg))
   in
   (* Compute signature of packaged unit *)
@@ -1198,11 +1213,11 @@ let package_interfaces objfiles targetfile functor_name =
 	(fun f ->
           let pref = chop_extensions f in
           let modname = String.capitalize(Filename.basename pref) in
-          let (sg, fargs) = Env.read_signature_and_args modname f in
+          let (sg, f_args, f_parts) = Env.read_signature_and_args modname f in
 	  begin match !functor_args with
-	      None -> functor_args := Some (f, fargs)
-	    | Some (f1, fargs1) ->
-	      if fargs1 <> fargs then
+	      None -> functor_args := Some (f, f_args)
+	    | Some (f1, f_args1) ->
+	      if f_args1 <> f_args then
 		raise (Error(Location.none,
 			     Inconsistent_functor_arguments(f1, f)));
 	  end;
@@ -1214,8 +1229,11 @@ let package_interfaces objfiles targetfile functor_name =
       | Some (_, fargs), None -> (fargs, None)
       | (None | Some (_, [])), Some id ->
 	raise (Error (Location.none, No_functor_argument))
-      | Some (_, (arg,_) :: fargs), Some id ->
-	let newarg = Ident.create (Ident.name arg) in
+      | Some (_, (name,_) :: fargs), Some id ->
+	let newarg = Ident.create name in
+	let arg = Ident.create_persistent name in
+	Ident.make_functor_arg arg;
+	Ident.make_functor_part arg;
 	(fargs, Some (id, arg, newarg))
   in
   (* Compute signature of packaged unit *)
@@ -1238,7 +1256,7 @@ let package_interfaces objfiles targetfile functor_name =
         with Not_found ->
 	  raise (Error(Location.none, Functor_argument_not_found functor_arg_name))
       in
-      let functor_arg_sg = Env.read_signature functor_arg_name functor_arg_file
+      let (functor_arg_sg, _, _) = Env.read_signature_and_args functor_arg_name functor_arg_file
       in
       [
 	Tsig_module(functor_id,

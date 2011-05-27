@@ -233,7 +233,7 @@ objinfo_helper$(EXE): objinfo_helper.c ../config/s.h
           objinfo_helper.c $(LIBBFD_LINK)
 
 OBJINFO=../utils/misc.cmo ../utils/config.cmo ../bytecomp/bytesections.cmo \
-        objinfo.cmo
+        ../typing/cmi_format.cmo objinfo.cmo
 
 objinfo: objinfo_helper$(EXE) $(OBJINFO)
 	$(CAMLC) -o objinfo $(OBJINFO)

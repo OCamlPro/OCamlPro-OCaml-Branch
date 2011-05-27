@@ -347,16 +347,18 @@ let _ =
 
 
 let transl_functor_unit modname str =
-  let ids = Env.functor_parts () in
+  let ids = Env.get_functor_parts () in
   let functor_env = Ident.create "functor_env" in
-  let str = List.fold_left (fun str id ->
-    if Ident.name id = modname then str else
-      Llet(Strict, id,
+  let (str, _) = List.fold_left (fun (str, tbl) (name, _) ->
+    if name = modname || Tbl.mem name tbl then (str, tbl) else
+      let id = Env.get_functor_part name in
+      let str = Llet(Strict, id,
 	 Lapply(mod_prim "find_functor_arg", [
 	   Lconst(Const_base (Const_string (Ident.name id)));
 	   Lvar functor_env;
-	 ], Location.none), str)
-  ) str ids
+	 ], Location.none), str) in
+      (str, Tbl.add name id tbl)
+  ) (str, Tbl.empty) ids
   in
   Lfunction(Curried, [ functor_env ], str)
 

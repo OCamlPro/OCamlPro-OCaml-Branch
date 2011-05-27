@@ -409,7 +409,7 @@ let rec comp_expr env exp sz cont =
         fatal_error ("Bytegen.comp_expr: var " ^ Ident.unique_name id)
       end
     | Lprim(Pgetglobal id, []) when Ident.is_functor_part id ->
-      Printf.fprintf stderr "Found getglobal %s\n%!" (Ident.unique_name id);
+(*      Printf.fprintf stderr "Found getglobal %s\n%!" (Ident.unique_name id); *)
       let exp = Lvar (Env.get_functor_part (Ident.name id)) in
       comp_expr env exp sz cont
   | Lconst cst ->

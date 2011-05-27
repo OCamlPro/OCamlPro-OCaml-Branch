@@ -21,13 +21,14 @@ open Longident
 open Path
 open Types
 
+type intf_info = string * Digest.t
 
 type error =
     Not_an_interface of string
   | Corrupted_interface of string
   | Illegal_renaming of string * string
   | Inconsistent_import of string * string * string
-  | Inconsistent_argument of string * string
+  | Inconsistent_arguments of string * intf_info list * intf_info list
   | Need_recursive_types of string * string
 
 exception Error of error
@@ -135,9 +136,10 @@ let check_modtype_inclusion =
 
 let current_unit = ref ""
 
-let functor_args = ref ([] : (Ident.t * Digest.t) list)
+let functor_args = ref ([] : (string * Digest.t) list)
 let functor_arg_crcs = (Hashtbl.create 17 : (string, Digest.t * string) Hashtbl.t)
-let functor_parts = (Hashtbl.create 17 : (string, Ident.t) Hashtbl.t)
+let functor_parts = ref ([] : (string * (string * Digest.t) list) list)
+let functor_parts_table = (Hashtbl.create 17 : (string, Ident.t) Hashtbl.t)
 
 (* Persistent structure descriptions *)
 
@@ -158,7 +160,8 @@ type pers_struct =
     ps_id : Ident.t;
     ps_kind : ps_kind;
     ps_crc : Digest.t;
-    ps_functor_args : (Ident.t * Digest.t) list;
+    ps_functor_args : (string * Digest.t) list;
+    ps_functor_parts : (string * (string * Digest.t) list) list;
  }
 
 let persistent_structures = (Hashtbl.create 17 : (string, pers_struct) Hashtbl.t)
@@ -176,17 +179,17 @@ let check_consistency filename crcs =
     raise(Error(Inconsistent_import(name, auth, source)))
 
 let check_functor_args filename crcs =
-  List.iter
-    (fun (id, crc) ->
-      let id = Ident.name id in
-      try
-	let (crc2, auth) = Hashtbl.find functor_arg_crcs id in
-	if crc <> crc2 then
-	  raise (Error (Inconsistent_import (id, filename, auth)))
-      with Not_found ->
-	raise(Error(Inconsistent_argument(id, filename)))
-    )
-    crcs
+  if crcs <> [] then
+    let rec iter current_crcs =
+      match current_crcs with
+	  [] ->
+	    raise(Error(Inconsistent_arguments(filename, crcs, !functor_args)))
+	| _ :: tail ->
+	  if current_crcs = crcs then () else
+	    iter tail
+
+    in
+    iter !functor_args
 
 (* Reading persistent structures from .cmi files *)
 
@@ -200,19 +203,20 @@ let add_functor_arg id =
   Ident.make_functor_part id;
   Ident.make_functor_arg id;
   let name = Ident.name id in
-  Hashtbl.add functor_parts name (Ident.create name)
+  functor_parts := (Ident.name id, []) :: !functor_parts;
+  if not (Hashtbl.mem functor_parts_table name) then
+    Hashtbl.add functor_parts_table name (Ident.create name)
 
-let add_functor_part id =
+let add_functor_part id deps =
   Ident.make_functor_part id;
   let name = Ident.name id in
-  Hashtbl.add functor_parts name (Ident.create name)
+  functor_parts := (Ident.name id, deps) :: !functor_parts;
+  if not (Hashtbl.mem functor_parts_table name) then
+    Hashtbl.add functor_parts_table name (Ident.create name)
 
-let get_functor_part name = Hashtbl.find functor_parts name
+let get_functor_part name = Hashtbl.find functor_parts_table name
 
-let functor_parts () =
-  let list = ref [] in
-  Hashtbl.iter (fun _ id -> list := id :: !list) functor_parts;
-  !list
+let get_functor_parts () = !functor_parts
 
 let read_pers_struct modname filename ps_kind =
 (*  Printf.fprintf stderr "Read_Pers_Struct %s %s\n%!" filename
@@ -236,7 +240,7 @@ let read_pers_struct modname filename ps_kind =
       match ps_kind with
 	| PersistentStructureArgument -> add_functor_arg ps_id
 	| PersistentStructureDependency ->
-	  if cmi.cmi_functor_args <> [] then add_functor_part ps_id
+	  if cmi.cmi_functor_args <> [] then add_functor_part ps_id cmi.cmi_functor_args
 	| PersistentStructureUnit -> ()
     end;
     let comps =
@@ -253,6 +257,7 @@ let read_pers_struct modname filename ps_kind =
 	       ps_kind = ps_kind;
 	       ps_id = ps_id;
 	       ps_functor_args = cmi.cmi_functor_args;
+	       ps_functor_parts = cmi.cmi_functor_parts;
 	     } in
     if ps.ps_name <> modname then
       raise(Error(Illegal_renaming(ps.ps_name, filename)));
@@ -281,6 +286,10 @@ let find_pers_struct name =
 let reset_cache () =
   current_unit := "";
   Hashtbl.clear persistent_structures;
+  functor_args := [];
+  functor_parts := [];
+  Hashtbl.clear functor_parts_table;
+  Hashtbl.clear functor_arg_crcs;
   Consistbl.clear crc_units
 
 let set_unit_name name =
@@ -872,10 +881,17 @@ let read_signature modname filename =
   let ps = read_pers_struct modname filename PersistentStructureDependency in
   ps.ps_sig
 
+let read_my_signature modname filename =
+(*  Printf.fprintf stderr "read_signature %s\n%!" modname; *)
+  let ps = read_pers_struct modname filename PersistentStructureDependency in
+  if ps.ps_functor_args <> !functor_args then
+    raise (Error(Inconsistent_arguments (filename, ps.ps_functor_args, !functor_args)));
+  ps.ps_sig
+
 let read_signature_and_args modname filename =
 (*  Printf.fprintf stderr "read_signature %s\n%!" modname; *)
   let ps = read_pers_struct modname filename PersistentStructureUnit in
-  (ps.ps_sig, ps.ps_functor_args)
+  (ps.ps_sig, ps.ps_functor_args, ps.ps_functor_parts)
 
 (* Return the CRC of the interface of the given compilation unit *)
 
@@ -907,6 +923,7 @@ let save_signature_with_imports sg modname filename imports =
       cmi_functor_args = !functor_args;
       cmi_arg_id = Ident.create modname;
       cmi_flags = (if !Clflags.recursive_types then [Rectypes] else []);
+      cmi_functor_parts = !functor_parts;
     } in
     let crc = output_cmi_info oc cmi in
     close_out oc;
@@ -927,6 +944,7 @@ let save_signature_with_imports sg modname filename imports =
 	ps_id = ps_pers_id;
 	ps_kind = PersistentStructureDependency;
 	ps_functor_args = cmi.cmi_functor_args;
+	ps_functor_parts = cmi.cmi_functor_parts;
       } in
     Hashtbl.add persistent_structures modname ps;
     Consistbl.set crc_units modname crc filename
@@ -948,18 +966,20 @@ as their identifier is marked persistent. This is harder:
 *)
 
 let add_functor_arguments modname =
-  add_functor_part (Ident.create_persistent modname);
-  functor_args := [];
-  List.iter (fun filename ->
-    let filename = Filename.chop_suffix filename ".mli" (* could be .cmi *) in
-    let modname = String.capitalize  (Filename.basename filename) in
-    let filename = filename ^ ".cmi" in
-    let ps = read_pers_struct modname filename PersistentStructureArgument in
-    functor_args := (ps.ps_id, ps.ps_crc) :: !functor_args;
-    Hashtbl.add functor_arg_crcs (Ident.name ps.ps_id) (ps.ps_crc, filename);
-  ) !Clflags.functors
+  if !Clflags.functors <> [] then begin
+    add_functor_part (Ident.create_persistent modname) [];
+    functor_args := [];
+    List.iter (fun filename ->
+      let filename = Filename.chop_suffix filename ".mli" (* could be .cmi *) in
+      let modname = String.capitalize  (Filename.basename filename) in
+      let filename = filename ^ ".cmi" in
+      let ps = read_pers_struct modname filename PersistentStructureArgument in
+      functor_args := (Ident.name ps.ps_id, ps.ps_crc) :: !functor_args;
+      Hashtbl.add functor_arg_crcs (Ident.name ps.ps_id) (ps.ps_crc, filename);
+    ) !Clflags.functors
+  end
 
-let functor_args () = !functor_args
+let get_functor_args () = !functor_args
 
 let initial = Predef.build_initial_env add_type add_exception empty
 
@@ -983,10 +1003,14 @@ let report_error ppf = function
       "@[<hov>The files %s@ and %s@ \
               make inconsistent assumptions@ over interface %s@]"
       source1 source2 name
-  | Inconsistent_argument(name, source1) -> fprintf ppf
-      "@[<hov>The functor argument file %s@ \
-              has unmet dependency towards another argument %s@]"
-      source1 name
+  | Inconsistent_arguments(filename, file_functor_args, current_functor_args) ->
+    fprintf ppf
+      "@[<hov>Inconsistent functor arguments with file %s@." filename;
+    fprintf ppf "File arguments:";
+    List.iter (fun (id,_) -> fprintf ppf "(%s)" id) file_functor_args;
+    fprintf ppf "@.Current arguments:";
+    List.iter (fun (id,_) -> fprintf ppf "(%s)" id) current_functor_args;
+    fprintf ppf "@]"
   | Need_recursive_types(import, export) ->
       fprintf ppf
         "@[<hov>Unit %s imports from %s, which uses recursive types.@ %s@]"

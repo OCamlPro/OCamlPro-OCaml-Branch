@@ -37,7 +37,9 @@ val package_interfaces:
 
 val package_units:
   string list -> string -> string -> Ident.t option ->
-    Typedtree.module_coercion * (Ident.t * Ident.t) option * (Ident.t * Digest.t) list
+    Typedtree.module_coercion * (Ident.t * Ident.t) option * (string * Digest.t) list
+
+val print_types : formatter -> string -> unit
 
 type error =
     Cannot_apply of module_type

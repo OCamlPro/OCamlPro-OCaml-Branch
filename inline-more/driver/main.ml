@@ -47,7 +47,10 @@ let process_file ppf name =
     objfiles := name :: !objfiles
   else if Filename.check_suffix name ".cmi" && !make_package then
     objfiles := name :: !objfiles
-  else if Filename.check_suffix name ext_obj
+  else if Filename.check_suffix name ".cmi" && !print_types then begin
+    Compile.init_path ();
+    Typemod.print_types ppf name
+  end else if Filename.check_suffix name ext_obj
        || Filename.check_suffix name ext_lib then
     ccobjs := name :: !ccobjs
   else if Filename.check_suffix name ext_dll then
@@ -157,6 +160,9 @@ let default_output = function
   | Some s -> s
   | None -> Config.default_executable_name
 
+let module_name filename =
+  String.capitalize (Misc.chop_extensions (Filename.basename filename))
+
 let main () =
   try
     Arg.parse Options.list anonymous usage;
@@ -178,6 +184,7 @@ let main () =
     else if !make_package then begin
       Compile.init_path();
       let target = extract_output !output_name in
+      Env.add_functor_arguments (module_name target);
       if Filename.check_suffix target ".cmi" then
 	Typemod.package_interfaces (List.rev !objfiles)
           target !pack_functor

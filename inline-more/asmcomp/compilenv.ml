@@ -205,6 +205,8 @@ let write_unit_info info filename =
 
 let save_unit_info filename =
   current_unit.ui_imports_cmi <- Env.imported_units();
+  current_unit.ui_functor_args <- Env.get_functor_args ();
+  current_unit.ui_functor_parts <- Env.get_functor_parts ();
   write_unit_info current_unit filename
 
 
