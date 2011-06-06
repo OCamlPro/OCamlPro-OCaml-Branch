@@ -204,6 +204,7 @@ let add_functor_arg id =
   Ident.make_functor_arg id;
   let name = Ident.name id in
   functor_parts := (Ident.name id, []) :: !functor_parts;
+(*  Printf.fprintf stderr "add_functor_arg %s\n" (Ident.name id); *)
   if not (Hashtbl.mem functor_parts_table name) then
     Hashtbl.add functor_parts_table name (Ident.create name)
 
@@ -211,6 +212,7 @@ let add_functor_part id deps =
   Ident.make_functor_part id;
   let name = Ident.name id in
   functor_parts := (Ident.name id, deps) :: !functor_parts;
+(*  Printf.fprintf stderr "add_functor_part %s\n" (Ident.name id); *)
   if not (Hashtbl.mem functor_parts_table name) then
     Hashtbl.add functor_parts_table name (Ident.create name)
 
@@ -396,7 +398,7 @@ let find_module path env =
           let ps = find_pers_struct (Ident.name id) in
           Tmty_signature(ps.ps_sig)
         else begin
-	  Printf.fprintf stderr "Non persistent ident %s not found\n%!" (Ident.unique_name id);
+(*	  Printf.fprintf stderr "Non persistent ident %s not found\n%!" (Ident.unique_name id); *)
 	  raise Not_found
 	end
       end
@@ -882,14 +884,14 @@ let read_signature modname filename =
   ps.ps_sig
 
 let read_my_signature modname filename =
-(*  Printf.fprintf stderr "read_signature %s\n%!" modname; *)
+(*  Printf.fprintf stderr "read_my_signature %s\n%!" modname; *)
   let ps = read_pers_struct modname filename PersistentStructureDependency in
   if ps.ps_functor_args <> !functor_args then
     raise (Error(Inconsistent_arguments (filename, ps.ps_functor_args, !functor_args)));
   ps.ps_sig
 
 let read_signature_and_args modname filename =
-(*  Printf.fprintf stderr "read_signature %s\n%!" modname; *)
+(*  Printf.fprintf stderr "read_signature_and_args %s\n%!" modname; *)
   let ps = read_pers_struct modname filename PersistentStructureUnit in
   (ps.ps_sig, ps.ps_functor_args, ps.ps_functor_parts)
 

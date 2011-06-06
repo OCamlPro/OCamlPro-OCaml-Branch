@@ -1,0 +1,15 @@
+FUNCTORX = -functor arguments/x.mli -dlambda
+PACK_FUNCTORX = -pack-functor Make -dlambda
+
+OCAMLC=$(ROOT)/byterun/ocamlrun $(OCP) $(OFLAGS) -I $(ROOT)/stdlib
+
+all: $(OCP)
+	$(OCAMLC) -c arguments/x.mli
+	$(OCAMLC) -c -functor arguments/x.mli arguments/y.mli
+	$(OCAMLC) -c -functor arguments/y.mli -functor arguments/x.mli a.mli
+	$(OCAMLC) -c -functor arguments/y.mli -for-pack Lib.Make_a -functor arguments/x.mli a.ml
+	$(OCAMLC) -I arguments -functor arguments/x.mli -for-pack Lib -pack-functor Make -o make_a.$(CMO) a.$(CMO)
+	$(OCAMLC) -c -functor arguments/x.mli -for-pack Lib b.ml
+	$(OCAMLC) -I arguments -pack-functor Make -o lib.$(CMO) make_a.$(CMO) b.$(CMO)
+	$(OCAMLC) -c test.ml
+	$(OCAMLC) -o test.$(EXE) lib.$(CMO) test.$(CMO)

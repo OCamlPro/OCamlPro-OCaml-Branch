@@ -1,0 +1,14 @@
+PACKER=	../../$(ROOT)/ocplib-private/src/ocp-pack/ocp-pack.byte
+
+# ocamlpack can pack modules into a file as a functor. Use it to generate lib.ml
+# that will be used for testing
+lib.ml: $(PACKER) arguments/x.mli a.mli a.ml b.ml
+	$(PACKER) -o lib.ml $(PACK_FUNCTOR) $(FUNCTOR) a.ml b.ml
+
+pack: lib.ml test.ml
+	$(OCAMLC) -c lib.ml
+	$(OCAMLC) -c test.ml
+	$(OCAMLC) -o test lib.$(CMO) test.$(CMO)
+
+clean:
+	rm -f lib.ml

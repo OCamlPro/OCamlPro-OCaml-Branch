@@ -345,11 +345,13 @@ let _ =
 
 (* Compile an implementation *)
 
+(* TODO: check what happens if a module has the same name as a module given as
+   argument *)
 
-let transl_functor_unit modname str =
+let transl_functor_unit functor_env modname str =
   let ids = Env.get_functor_parts () in
-  let functor_env = Ident.create "functor_env" in
-  let (str, _) = List.fold_left (fun (str, tbl) (name, _) ->
+  let (str, _) = List.fold_left (fun (str, tbl) (name, parts) ->
+(*    Printf.fprintf stderr "transl_functor_unit: %s\n" name; *)
     if name = modname || Tbl.mem name tbl then (str, tbl) else
       let id = Env.get_functor_part name in
       let str = Llet(Strict, id,
@@ -369,7 +371,8 @@ let transl_implementation module_name (str, cc) =
   let str = transl_label_init (transl_structure [] cc (global_path module_id) str) in
   Lprim(Psetglobal module_id,
 	[if !Clflags.functors <> [] then
-	  Lprim(Pmakeblock(0, Immutable), [transl_functor_unit module_name str])
+	    let functor_env = Ident.create "functor_env" in
+	  Lprim(Pmakeblock(0, Immutable), [transl_functor_unit functor_env module_name str])
 	else str])
 
 
@@ -642,7 +645,8 @@ let transl_store_implementation module_name (str, restr) =
     let str = Llet(Strict, id,
 		   Lprim(Pmakeblock(0, Immutable), Array.to_list (Array.create size lambda_unit)),
 		   Lsequence (str, Lvar id) ) in
-    let str = transl_functor_unit module_name str in
+    let functor_env = Ident.create "functor_env" in
+    let str = transl_functor_unit functor_env module_name str in
     (size, str)
   else r
 
@@ -760,7 +764,8 @@ let const_pack_unit_name id =
   in
   const_string name
 
-let transl_functor_package component_names target_name coercion  (functor_id, functor_arg) store_global =
+let transl_functor_package component_names target_name coercion
+    (functor_id, functor_arg) initial_env =
       let env0_id = Ident.create "functor_env0" in
       let env1_id = Ident.create "functor_env1" in
       let rec eval_components env comps evaluated =
@@ -797,18 +802,18 @@ let transl_functor_package component_names target_name coercion  (functor_id, fu
       in
       let components = eval_components env1_id component_names [] in
       let functor_body =
-	Llet(Strict, env0_id,
-	     Lapply(mod_prim "create_functor_env",[lambda_unit], Location.none),
+	Llet(Strict, env0_id, initial_env,
 	     Llet(Strict, env1_id,
 		  Lapply(mod_prim "add_functor_arg",
 			 [const_pack_unit_name functor_arg; Lvar functor_arg; Lvar env0_id],
 			 Location.none),
 		  components))
       in
-	Llet(Strict, functor_id,
-	     Lfunction(Curried, [functor_arg], functor_body),
-	     store_global functor_id)
+(*	Llet(Strict, functor_id, *)
+	     Lfunction(Curried, [functor_arg], functor_body)
+	       (* , store_global functor_id) *)
 
+let gen_new_env () = Lapply(mod_prim "create_functor_env",[lambda_unit], Location.none)
 
 let transl_package component_names target_name coercion =
   let components =
@@ -828,11 +833,17 @@ let transl_package component_names target_name coercion functor_info =
   match functor_info with
       None -> transl_package component_names target_name coercion
     | Some (functor_id, functor_arg) ->
-      transl_functor_package component_names target_name coercion  (functor_id, functor_arg)
-	(fun functor_id ->
-	     Lprim(Psetglobal target_name,
-		   [Lprim(Pmakeblock(0, Immutable), [Lvar functor_id])]))
-
+      let functor_env = Ident.create "functor_env" in
+      let str =
+	transl_functor_package component_names target_name coercion  (functor_id, functor_arg)
+      (if Env.get_functor_args () <> [] then Lvar functor_env else gen_new_env ())
+      in
+      Lprim(Psetglobal target_name,
+	    [Lprim(Pmakeblock(0, Immutable),
+		  [if !Clflags.functors <> [] then
+		      let str = Lprim(Pmakeblock(0, Immutable),[str]) in
+		      transl_functor_unit functor_env (Ident.name target_name) str
+		    else str])])
 
 let transl_store_package component_names target_name coercion =
   let rec make_sequence fn pos arg =
@@ -864,12 +875,21 @@ let transl_store_package component_names target_name coercion functor_info =
   match functor_info with
       None -> transl_store_package component_names target_name coercion
     | Some (functor_id, functor_arg) ->
-      1,
-      transl_functor_package component_names target_name coercion  (functor_id, functor_arg)
-	(fun functor_id ->
+      let functor_env = Ident.create "functor_env" in
+      let str =
+	transl_functor_package component_names target_name coercion  (functor_id, functor_arg)
+	  (if Env.get_functor_args () <> [] then Lvar functor_env else gen_new_env ())
+      in
+      (1,
+	if !Clflags.functors <> [] then
+	  let module_name = Ident.name target_name in
+	  let str = Lprim(Pmakeblock(0, Immutable), [str]) in
+	  let str = transl_functor_unit functor_env module_name str in
+	  str
+	else
           Lprim(Psetfield(0, false),
-                   [Lprim(Pgetglobal target_name, []);
-		    Lvar functor_id]))
+		[Lprim(Pgetglobal target_name, []);
+		 str]))
 
 
 (* Error report *)

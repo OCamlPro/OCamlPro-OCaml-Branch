@@ -1159,7 +1159,8 @@ let package_units objfiles cmifile modulename functor_id =
         with Not_found ->
 	  raise (Error(Location.none, Functor_argument_not_found functor_arg_name))
       in
-      let functor_arg_sg = Env.read_signature functor_arg_name functor_arg_file
+(* TODO: check consistency of arguments ? *)
+      let (functor_arg_sg, _, _) = Env.read_signature_and_args functor_arg_name functor_arg_file
       in
       [
 	Tsig_module(functor_id,
