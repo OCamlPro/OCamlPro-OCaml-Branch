@@ -1054,7 +1054,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
           find_in_path_uncap !Config.load_path (modulename ^ ".cmi")
         with Not_found ->
           raise(Error(Location.none, Interface_not_compiled sourceintf)) in
-      let dclsig = Env.read_signature modulename intf_file in
+      let dclsig = Env.read_my_signature modulename intf_file in
       let coercion = Includemod.compunit sourcefile sg intf_file dclsig in
       (str, coercion)
     end else begin
@@ -1126,7 +1126,7 @@ let package_units objfiles cmifile modulename functor_id =
     if not (Tbl.mem modname !provided_impl) then
       raise(Error(Location.none, Implementation_is_required f));
     ) !needed_impl;
-  let (functor_args, functor_info) =
+  let (remaining_functor_args, functor_info) =
     match !functor_args, functor_id with
 	None, None -> ([], None)
       | Some (_, fargs), None -> (fargs, None)
@@ -1177,7 +1177,7 @@ let package_units objfiles cmifile modulename functor_id =
     if not (Sys.file_exists cmifile) then begin
       raise(Error(Location.in_file mlifile, Interface_not_compiled mlifile))
     end;
-    let dclsig = Env.read_signature modulename cmifile in
+    let dclsig = Env.read_my_signature modulename cmifile in
     Includemod.compunit "(obtained by packing)" sg mlifile dclsig
   end else begin
     (* Determine imports *)
@@ -1191,7 +1191,8 @@ let package_units objfiles cmifile modulename functor_id =
     Tcoerce_none
   end
   in
-  (cc, functor_info, functor_args)
+  (cc, functor_info, remaining_functor_args,
+   match !functor_args with None -> [] | Some (_,fargs) -> fargs)
 
 let package_interfaces objfiles targetfile functor_name =
   let objfiles =

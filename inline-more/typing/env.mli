@@ -26,6 +26,7 @@ val add_functor_arguments : string -> unit
 val get_functor_args : unit -> (string * Digest.t) list
 val get_functor_parts : unit -> (string  * (string * Digest.t) list) list
 val get_functor_part : string -> Ident.t
+val check_remaining_functor_args : intf_info list -> unit
 val diff: t -> t -> Ident.t list
 
 (* Lookup by paths *)

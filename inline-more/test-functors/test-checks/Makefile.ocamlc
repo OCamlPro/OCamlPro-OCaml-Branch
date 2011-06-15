@@ -1,0 +1,11 @@
+ROOT=../..
+
+OCP= $(ROOT)/ocamlc
+CMO=cmo
+CMA=cma
+EXE=byte
+
+clean:
+	rm -f *.cm? *.cmi
+
+include Makefile.shared

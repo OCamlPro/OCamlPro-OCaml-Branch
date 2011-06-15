@@ -37,7 +37,10 @@ val package_interfaces:
 
 val package_units:
   string list -> string -> string -> Ident.t option ->
-    Typedtree.module_coercion * (Ident.t * Ident.t) option * (string * Digest.t) list
+    Typedtree.module_coercion
+  * (Ident.t * Ident.t) option (* functor_info *)
+  * (string * Digest.t) list   (* remaining functor_args *)
+  * (string * Digest.t) list   (* initial functor args (for consistency checks) *)
 
 val print_types : formatter -> string -> unit
 

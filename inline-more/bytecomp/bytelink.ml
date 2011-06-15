@@ -164,7 +164,9 @@ let scan_file obj_name tolink =
 
 let crc_interfaces = Consistbl.create ()
 
-let check_consistency file_name cu =
+let check_consistency file_name cu functor_args =
+  if cu.cu_functor_args <> functor_args then
+    raise (Env.Error(Env.Inconsistent_arguments (file_name, cu.cu_functor_args, functor_args)));
   try
     List.iter
       (fun (name, crc) ->
@@ -185,7 +187,7 @@ let debug_info = ref ([] : (int * string) list)
 (* Link in a compilation unit *)
 
 let link_compunit output_fun currpos_fun inchan file_name compunit =
-  check_consistency file_name compunit;
+  check_consistency file_name compunit [];
   seek_in inchan compunit.cu_pos;
   let code_block = String.create compunit.cu_codesize in
   really_input inchan code_block 0 compunit.cu_codesize;

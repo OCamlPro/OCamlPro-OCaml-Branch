@@ -1,0 +1,12 @@
+ROOT=../..
+
+OCP= $(ROOT)/ocamlopt
+OFLAGS=
+CMO=cmx
+CMA=cmxa
+EXE=opt
+
+clean:
+	rm -f *.cmx *.o *.a *.s
+
+include Makefile.shared

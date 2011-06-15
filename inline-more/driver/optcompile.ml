@@ -140,7 +140,7 @@ let implementation ppf sourcefile outputprefix =
     Pparse.remove_preprocessed inputfile;
     Stypes.dump (outputprefix ^ ".annot");
   with x ->
-    Printexc.print_backtrace stderr;
+(*    Printexc.print_backtrace stderr; *)
     remove_file objfile;
     remove_file cmxfile;
     Pparse.remove_preprocessed_if_ast inputfile;

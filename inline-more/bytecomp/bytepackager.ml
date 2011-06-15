@@ -74,14 +74,14 @@ let relocate_debug base prefix subst ev =
 
 (* Read the unit information from a .cmo file. *)
 
-type pack_member_kind = PM_intf | PM_impl of compilation_unit
+type pack_member_kind = PM_intf of string | PM_impl of compilation_unit
 
 type pack_member =
   { pm_file: string;
     pm_name: string;
     pm_kind: pack_member_kind }
 
-let read_member_info file =
+let read_member_info functor_args file =
   let name =
     String.capitalize(Filename.basename(chop_extensions file)) in
   let kind =
@@ -98,12 +98,13 @@ let read_member_info file =
       if compunit.cu_name <> name
       then raise(Error(Illegal_renaming(file, compunit.cu_name)));
       close_in ic;
+      Bytelink.check_consistency file compunit functor_args;
       PM_impl compunit
     with x ->
       close_in ic;
       raise x
     end else
-      PM_intf in
+      PM_intf name in
   { pm_file = file; pm_name = name; pm_kind = kind }
 
 (* Read the bytecode from a .cmo file.
@@ -115,7 +116,6 @@ let read_member_info file =
 let rename_append_bytecode oc mapping defined ofs prefix subst objfile compunit =
   let ic = open_in_bin objfile in
   try
-    Bytelink.check_consistency objfile compunit;
     List.iter
       (rename_relocation objfile mapping defined ofs)
       compunit.cu_reloc;
@@ -141,7 +141,7 @@ let rec rename_append_bytecode_list oc mapping defined ofs prefix subst = functi
       ofs
   | m :: rem ->
       match m.pm_kind with
-      | PM_intf ->
+      | PM_intf _ ->
           rename_append_bytecode_list oc mapping defined ofs prefix subst rem
       | PM_impl compunit ->
           let size =
@@ -165,7 +165,7 @@ let build_global_target oc target_name members mapping pos coercion functor_info
     List.map2
       (fun m (id1, id2) ->
         match m.pm_kind with
-        | PM_intf -> None
+        | PM_intf _ -> None
         | PM_impl _ -> Some id2)
       members mapping in
   let lam =
@@ -182,9 +182,28 @@ let build_global_target oc target_name members mapping pos coercion functor_info
 
 (* Build the .cmo file obtained by packaging the given .cmo files. *)
 
-let package_object_files files targetfile targetname coercion (functor_info, functor_args) =
+let package_object_files files targetfile targetname coercion
+    (functor_info, remaining_functor_args, functor_args) =
   let members =
-    map_left_right read_member_info files in
+    map_left_right (read_member_info functor_args) files in
+  let functor_parts = ref [] in
+  let functor_parts_table = Hashtbl.create 17 in
+  let _ = List.fold_left (fun provided pm ->
+    match pm.pm_kind with
+	PM_intf modname -> modname :: provided
+      | PM_impl cu ->
+	let parts = cu.cu_functor_parts in
+	List.iter (fun (name, deps) ->
+	  if name <> cu.cu_name && deps <> [] && not (List.mem name provided) && not (Hashtbl.mem functor_parts_table name) then
+	    if deps = functor_args && functor_args <> remaining_functor_args then
+	      raise (Symtable.Error(Symtable.Undefined_global name))
+	    else begin
+	      functor_parts := (name, deps) :: !functor_parts;
+	      Hashtbl.add functor_parts_table name deps
+	    end
+	) parts;
+	cu.cu_name :: provided
+  )  [] members in
   let unit_names =
     List.map (fun m -> m.pm_name) members in
   let mapping =
@@ -218,8 +237,8 @@ let package_object_files files targetfile targetname coercion (functor_info, fun
         cu_primitives = !primitives;
         cu_force_link = !force_link;
         cu_debug = if pos_final > pos_debug then pos_debug else 0;
-	cu_functor_parts = []; (* TODO : add functor parts from submodules *)
-	cu_functor_args = functor_args;
+	cu_functor_parts = !functor_parts;
+	cu_functor_args = remaining_functor_args;
         cu_debugsize = pos_final - pos_debug } in
     output_value oc compunit;
     seek_out oc pos_depl;
@@ -241,13 +260,16 @@ let package_files files targetfile functor_name =
   let prefix = chop_extensions targetfile in
   let targetcmi = prefix ^ ".cmi" in
   let targetname = String.capitalize(Filename.basename prefix) in
+  Env.add_functor_arguments targetname;
   let functor_id = match functor_name with
       None -> None
     | Some modname -> Some (Ident.create modname) in
   try
-    let (coercion, functor_info, functor_args) =
+    let (coercion, functor_info, remaining_functor_args, functor_args) =
       Typemod.package_units files targetcmi targetname functor_id in
-    package_object_files files targetfile targetname coercion (functor_info, functor_args)
+    Env.check_remaining_functor_args remaining_functor_args;
+    package_object_files files targetfile targetname coercion
+      (functor_info, remaining_functor_args, functor_args)
 
   with x ->
     remove_file targetfile; raise x

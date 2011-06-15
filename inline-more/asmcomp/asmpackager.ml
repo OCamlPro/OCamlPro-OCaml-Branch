@@ -34,14 +34,14 @@ exception Error of error
 
 (* Read the unit information from a .cmx file. *)
 
-type pack_member_kind = PM_intf | PM_impl of unit_infos
+type pack_member_kind = PM_intf of string | PM_impl of unit_infos
 
 type pack_member =
   { pm_file: string;
     pm_name: string;
     pm_kind: pack_member_kind }
 
-let read_member_info pack_path file =
+let read_member_info pack_path functor_args file =
   let name =
     String.capitalize(Filename.basename(chop_extensions file)) in
   let kind =
@@ -52,27 +52,28 @@ let read_member_info pack_path file =
       if info.ui_symbol <>
          (Compilenv.current_unit_infos()).ui_symbol ^ "__" ^ info.ui_name
       then raise(Error(Wrong_for_pack(file, pack_path)));
-      Asmlink.check_consistency file info crc;
+      Asmlink.check_consistency file info crc functor_args;
       Compilenv.cache_unit_info info;
       PM_impl info
     end else
-      PM_intf in
+      PM_intf name in
   { pm_file = file; pm_name = name; pm_kind = kind }
 
 (* Check absence of forward references *)
 
-let check_units members =
+let check_units functor_args members =
   let rec check forbidden = function
     [] -> ()
   | mb :: tl ->
       begin match mb.pm_kind with
-      | PM_intf -> ()
+      | PM_intf _ -> ()
       | PM_impl infos ->
           List.iter
             (fun (unit, _) ->
               if List.mem unit forbidden
               then raise(Error(Forward_reference(mb.pm_file, unit))))
-            infos.ui_imports_cmx
+            infos.ui_imports_cmx;
+   	if infos.ui_functor_args <> functor_args then assert false;
       end;
       check (list_remove mb.pm_name forbidden) tl in
   check (List.map (fun mb -> mb.pm_name) members) members
@@ -92,7 +93,7 @@ let make_package_object ppf members targetobj targetname coercion functor_info =
     List.map
       (fun m ->
         match m.pm_kind with
-        | PM_intf -> None
+        | PM_intf _ -> None
         | PM_impl _ -> Some(Ident.create_persistent m.pm_name))
       members in
   Asmgen.compile_implementation
@@ -102,7 +103,7 @@ let make_package_object ppf members targetobj targetname coercion functor_info =
   let objfiles =
     List.map
       (fun m -> chop_extension_if_any m.pm_file ^ Config.ext_obj)
-      (List.filter (fun m -> m.pm_kind <> PM_intf) members) in
+      (List.filter (fun m -> match m.pm_kind with PM_intf _ -> false | PM_impl _ -> true) members) in
   let ok =
     Ccomp.call_linker Ccomp.Partial targetobj (objtemp :: objfiles) ""
   in
@@ -111,7 +112,25 @@ let make_package_object ppf members targetobj targetname coercion functor_info =
 
 (* Make the .cmx file for the package *)
 
-let build_package_cmx members cmxfile functor_args =
+let build_package_cmx members cmxfile functor_args remaining_functor_args =
+  let functor_parts = ref [] in
+  let functor_parts_table = Hashtbl.create 17 in
+  let _ = List.fold_left (fun provided pm ->
+    match pm.pm_kind with
+	PM_intf modname -> modname :: provided
+      | PM_impl cu ->
+	let parts = cu.ui_functor_parts in
+	List.iter (fun (name, deps) ->
+	  if name <> cu.ui_name && deps <> [] && not (List.mem name provided) && not (Hashtbl.mem functor_parts_table name) then
+	    if deps = functor_args && functor_args <> remaining_functor_args then
+	      raise (Asmlink.Error(Asmlink.Missing_implementations [ name, [cu.ui_name]] ))
+	    else begin
+	      functor_parts := (name, deps) :: !functor_parts;
+	      Hashtbl.add functor_parts_table name deps
+	    end
+	) parts;
+	cu.ui_name :: provided
+  )  [] members in
   let unit_names =
     List.map (fun m -> m.pm_name) members in
   let filter lst =
@@ -124,7 +143,7 @@ let build_package_cmx members cmxfile functor_args =
   let units =
     List.fold_right
       (fun m accu ->
-        match m.pm_kind with PM_intf -> accu | PM_impl info -> info :: accu)
+        match m.pm_kind with PM_intf _ -> accu | PM_impl info -> info :: accu)
       members [] in
   let ui = Compilenv.current_unit_infos() in
   let pkg_infos =
@@ -147,23 +166,23 @@ let build_package_cmx members cmxfile functor_args =
           union(List.map (fun info -> info.ui_send_fun) units);
       ui_force_link =
           List.exists (fun info -> info.ui_force_link) units;
-      ui_functor_parts = []; (* TODO *)
-      ui_functor_args = functor_args; (* TODO *)
+      ui_functor_parts = !functor_parts;
+      ui_functor_args = remaining_functor_args;
     } in
   Compilenv.write_unit_info pkg_infos cmxfile
 
 (* Make the .cmx and the .o for the package *)
 
 let package_object_files ppf files targetcmx
-                         targetobj targetname coercion  (functor_info, functor_args) =
+                         targetobj targetname coercion  (functor_info, remaining_functor_args, functor_args) =
   let pack_path =
     match !Clflags.for_package with
     | None -> targetname
     | Some p -> p ^ "." ^ targetname in
-  let members = map_left_right (read_member_info pack_path) files in
-  check_units members;
+  let members = map_left_right (read_member_info pack_path functor_args) files in
+  check_units functor_args members;
   make_package_object ppf members targetobj targetname coercion functor_info;
-  build_package_cmx members targetcmx functor_args
+  build_package_cmx members targetcmx functor_args remaining_functor_args
 
 (* The entry point *)
 
@@ -178,6 +197,7 @@ let package_files ppf files targetcmx functor_name =
   let targetcmi = prefix ^ ".cmi" in
   let targetobj = chop_extension_if_any targetcmx ^ Config.ext_obj in
   let targetname = String.capitalize(Filename.basename prefix) in
+  Env.add_functor_arguments targetname;
   (* Set the name of the current "input" *)
   Location.input_name := targetcmx;
   (* Set the name of the current compunit *)
@@ -186,10 +206,11 @@ let package_files ppf files targetcmx functor_name =
       None -> None
     | Some modname -> Some (Ident.create modname) in
   try
-    let (coercion, functor_info, functor_args) =
+    let (coercion, functor_info, remaining_functor_args, functor_args) =
       Typemod.package_units files targetcmi targetname functor_id in
+    Env.check_remaining_functor_args remaining_functor_args;
     package_object_files ppf files targetcmx targetobj targetname coercion
-      (functor_info, functor_args)
+      (functor_info, remaining_functor_args, functor_args)
   with x ->
     remove_file targetcmx; remove_file targetobj;
     raise x

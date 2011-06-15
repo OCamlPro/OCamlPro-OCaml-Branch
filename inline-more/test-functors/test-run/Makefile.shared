@@ -3,13 +3,20 @@ PACK_FUNCTORX = -pack-functor Make -dlambda
 
 OCAMLC=$(ROOT)/byterun/ocamlrun $(OCP) $(OFLAGS) -I $(ROOT)/stdlib
 
+ARG_X= -functor arguments/x.mli
+ARG_Y= -functor arguments/y.mli
+
 all: $(OCP)
 	$(OCAMLC) -c arguments/x.mli
-	$(OCAMLC) -c -functor arguments/x.mli arguments/y.mli
-	$(OCAMLC) -c -functor arguments/y.mli -functor arguments/x.mli a.mli
-	$(OCAMLC) -c -functor arguments/y.mli -for-pack Lib.Make_a -functor arguments/x.mli a.ml
-	$(OCAMLC) -I arguments -functor arguments/x.mli -for-pack Lib -pack-functor Make -o make_a.$(CMO) a.$(CMO)
-	$(OCAMLC) -c -functor arguments/x.mli -for-pack Lib b.ml
-	$(OCAMLC) -I arguments -pack-functor Make -o lib.$(CMO) make_a.$(CMO) b.$(CMO)
+	$(OCAMLC) -c $(ARG_X) arguments/y.mli
+	$(OCAMLC) -c $(ARG_Y) $(ARG_X) a.mli
+	$(OCAMLC) -c $(ARG_Y) -for-pack Lib.Make_a $(ARG_X) a.ml
+	$(OCAMLC) -c $(ARG_Y) -for-pack Lib.Make_a.Uvw $(ARG_X) u.ml
+	$(OCAMLC) -c $(ARG_Y) -for-pack Lib.Make_a.Uvw $(ARG_X) v.ml
+	$(OCAMLC) -c $(ARG_Y) -for-pack Lib.Make_a.Uvw $(ARG_X) w.ml
+	$(OCAMLC) -pack $(ARG_Y) -for-pack Lib.Make_a -o uvw.$(CMO) $(ARG_X) u.$(CMO) v.$(CMO) w.$(CMO)
+	$(OCAMLC) -pack-functor Make -I arguments $(ARG_X) -for-pack Lib -o make_a.$(CMO) a.$(CMO) uvw.$(CMO)
+	$(OCAMLC) -c $(ARG_X) -for-pack Lib b.ml
+	$(OCAMLC) -pack-functor Make -I arguments -o lib.$(CMO) make_a.$(CMO) b.$(CMO)
 	$(OCAMLC) -c test.ml
 	$(OCAMLC) -o test.$(EXE) lib.$(CMO) test.$(CMO)

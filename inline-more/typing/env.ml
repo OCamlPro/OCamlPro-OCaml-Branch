@@ -191,6 +191,10 @@ let check_functor_args filename crcs =
     in
     iter !functor_args
 
+let check_remaining_functor_args remaining_functor_args =
+  if !functor_args <> remaining_functor_args then
+    raise (Error(Inconsistent_arguments ("(-pack)", remaining_functor_args, !functor_args)))
+
 (* Reading persistent structures from .cmi files *)
 
 open Cmi_format
@@ -221,12 +225,14 @@ let get_functor_part name = Hashtbl.find functor_parts_table name
 let get_functor_parts () = !functor_parts
 
 let read_pers_struct modname filename ps_kind =
-(*  Printf.fprintf stderr "Read_Pers_Struct %s %s\n%!" filename
+(*
+  Printf.fprintf stderr "Read_Pers_Struct %s %s\n%!" filename
     (match ps_kind with
 	PersistentStructureArgument -> "(functor argument)"
       | PersistentStructureDependency -> ""
       | PersistentStructureUnit -> "(functor unit)"
-    ); *)
+    );
+*)
   let ic = open_in_bin filename in
   try
     let buffer = String.create (String.length cmi_magic_number) in
@@ -1008,7 +1014,7 @@ let report_error ppf = function
   | Inconsistent_arguments(filename, file_functor_args, current_functor_args) ->
     fprintf ppf
       "@[<hov>Inconsistent functor arguments with file %s@." filename;
-    fprintf ppf "File arguments:";
+    fprintf ppf "File %s arguments:" filename;
     List.iter (fun (id,_) -> fprintf ppf "(%s)" id) file_functor_args;
     fprintf ppf "@.Current arguments:";
     List.iter (fun (id,_) -> fprintf ppf "(%s)" id) current_functor_args;

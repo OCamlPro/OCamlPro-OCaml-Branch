@@ -1,5 +1,5 @@
 
 type t
 
-val create : string -> t
+val create : unit -> t
 val to_string : t -> string

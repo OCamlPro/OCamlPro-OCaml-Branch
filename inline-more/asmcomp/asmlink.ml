@@ -41,7 +41,9 @@ let extra_implementations = ref ([] : string list)
 let implementations_defined = ref ([] : (string * string) list)
 let cmx_required = ref ([] : string list)
 
-let check_consistency file_name unit crc =
+let check_consistency file_name unit crc functor_args =
+  if unit.ui_functor_args <> functor_args then
+    raise (Env.Error(Env.Inconsistent_arguments (file_name, unit.ui_functor_args, functor_args)));
   begin try
     List.iter
       (fun (name, crc) ->
@@ -257,7 +259,7 @@ let call_linker_shared file_list output_name =
 let link_shared ppf objfiles output_name =
   let units_tolink = List.fold_right scan_file objfiles [] in
   List.iter
-    (fun (info, file_name, crc) -> check_consistency file_name info crc)
+    (fun (info, file_name, crc) -> check_consistency file_name info crc [])
     units_tolink;
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs;
   Clflags.ccopts := !lib_ccopts @ !Clflags.ccopts;
@@ -315,7 +317,7 @@ let link ppf objfiles output_name =
   | mg -> raise(Error(Missing_implementations mg))
   end;
   List.iter
-    (fun (info, file_name, crc) -> check_consistency file_name info crc)
+    (fun (info, file_name, crc) -> check_consistency file_name info crc [])
     units_tolink;
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs;
   Clflags.ccopts := !lib_ccopts @ !Clflags.ccopts; (* put user's opts first *)

@@ -1,0 +1,174 @@
+FUNCTORX = -functor arguments/x.mli -dlambda
+PACK_FUNCTORX = -pack-functor Make -dlambda
+
+OCAMLC=$(ROOT)/byterun/ocamlrun $(OCP) $(OFLAGS) -I $(ROOT)/stdlib
+
+good: good1  good2 good3 good4 good5
+bad: bad1  bad2  bad3  bad4 bad5 bad6 bad7 bad8 bad9 bad10 bad11
+
+good1:
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c y.mli
+	$(OCAMLC) -c -functor x.cmi -functor x.cmi a.mli
+	$(OCAMLC) -c -functor x.cmi -functor x.cmi a.ml
+	$(OCAMLC) -c -functor x.cmi -functor x.cmi b.ml
+
+good2:
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c y.mli
+	$(OCAMLC) -c -functor x.cmi -functor y.cmi a.mli
+	$(OCAMLC) -c -functor x.cmi -functor y.cmi a.ml
+	$(OCAMLC) -c -functor x.cmi -functor y.cmi b.ml
+
+good3:
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c y.mli
+	$(OCAMLC) -c -functor x.cmi a.mli
+	$(OCAMLC) -c -functor x.cmi a.ml
+	$(OCAMLC) -c -functor y.cmi -functor x.cmi b.ml
+
+good4:
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c -functor x.mli y.mli
+	$(OCAMLC) -c -functor y.cmi -functor x.cmi a.mli
+
+good5:
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c -functor x.mli z1.mli
+	$(OCAMLC) -c -for-pack Z -functor x.mli z2.ml
+	$(OCAMLC) -pack-functor Make -o z.$(CMO) z1.cmi z2.$(CMO)
+
+bad1:
+	@echo ========================================
+	@echo "A and B are compiled with an inconsistent list"
+	@echo "of arguments (two args, different order)"
+	@echo ========================================
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c y.mli
+	$(OCAMLC) -c -functor x.cmi -functor y.cmi a.mli
+	$(OCAMLC) -c -functor x.cmi -functor y.cmi a.ml
+	$(OCAMLC) -c -functor y.cmi -functor x.cmi b.ml \
+          || echo "****************    GOOD bad1: error detected    ***********"
+
+bad2:
+	@echo ========================================
+	@echo "Y has a direct reference to unit X, but is used as"
+	@echo "an argument in a context where X is an argument"
+	@echo ========================================
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c y.mli
+	$(OCAMLC) -c -functor x.cmi a.mli
+	$(OCAMLC) -c -functor x.cmi a.ml
+	$(OCAMLC) -c -functor x.cmi -functor y.cmi b.ml \
+          || echo "****************    GOOD bad2: error detected    ***********"
+
+
+bad3:
+	@echo ========================================
+	@echo "The implementation and the interfaces of A are compiled"
+	@echo "with different arguments (one and two)"
+	@echo ========================================
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c y.mli
+	$(OCAMLC) -c -functor x.cmi -functor x.cmi a.mli
+	$(OCAMLC) -c -functor x.cmi a.ml \
+          || echo "****************    GOOD bad3: error detected    ***********"
+
+
+bad4:
+	@echo ========================================
+	@echo "A is created with an inverted list of arguments:"
+	@echo "Y is the second argument of the functor"
+	@echo "so it should be passed as the first one of the"
+	@echo "command line."
+	@echo ========================================
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c -functor x.mli y.mli
+	$(OCAMLC) -c -functor x.cmi -functor y.cmi a.mli \
+          || echo "****************    GOOD bad4: error detected    ***********"
+
+
+
+bad5:
+	@echo ========================================
+	@echo Y has a direct reference to unit X, but is used as
+	@echo an argument in a context where X is an argument
+	@echo ========================================
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c y.mli
+	$(OCAMLC) -c a.mli
+	$(OCAMLC) -c a.ml
+	$(OCAMLC) -c -functor x.cmi b.ml \
+          || echo "****************    GOOD bad5: error detected    ***********"
+
+
+bad6:
+	@echo ========================================
+	@echo A depends on X as a normal dependency, B depends
+	@echo on A as a normal dependency, but B depends on X
+	@echo as an argument
+	@echo ========================================
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c -functor x.mli y.mli
+	$(OCAMLC) -c y.ml \
+          || echo "****************    GOOD bad6: error detected    ***********"
+
+bad7:
+	@echo ========================================
+	@echo Creating a library with functorized objects
+	@echo ========================================
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c -functor x.mli y.mli
+	$(OCAMLC) -c -functor y.mli -functor x.mli a.mli
+	$(OCAMLC) -c -functor y.mli -functor x.mli a.ml
+	$(OCAMLC) -c -functor y.mli -functor x.mli b.ml
+	$(OCAMLC) -a -o lib_ab.$(CMA) a.$(CMO) b.$(CMO) \
+          || echo "****************    GOOD bad7: error detected    ***********"
+
+
+
+# In this one: we have to check that, for each argument, a -for-pack is given with ocamlopt
+# We need to check that all units in -pack are fully applied. Maybe have a combination of -pack
+# that works for functors too.
+bad8:
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c -functor x.mli y.mli
+	$(OCAMLC) -c -functor y.mli -functor x.mli a.mli
+	$(OCAMLC) -c -for-pack Lib_ab -functor y.mli  -functor x.mli a.ml
+	$(OCAMLC) -c -for-pack Lib_ab -functor y.mli  -functor x.mli b.ml
+	$(OCAMLC) -pack -o lib_ab.$(CMO) a.$(CMO) b.$(CMO) \
+          || echo "****************    GOOD bad8: error detected    ***********"
+
+
+bad9:
+	@echo ========================================
+	@echo An interface and its implementation have different arguments
+	@echo ========================================
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c -functor x.mli y.mli
+	$(OCAMLC) -c y.ml \
+          || echo "****************    GOOD bad9: error detected    ***********"
+
+
+bad10:
+	@echo ========================================
+	@echo An interface and its implementation have different arguments
+	@echo ========================================
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c y.mli
+	$(OCAMLC) -c -functor x.mli y.ml \
+          || echo "****************    GOOD bad10: error detected    ***********"
+
+
+bad11:
+	@echo ========================================
+	@echo B depends on A, but A is not provided while packing
+	@echo ========================================
+	$(OCAMLC) -c x.mli
+	$(OCAMLC) -c y.mli
+	$(OCAMLC) -c -functor x.cmi -functor y.cmi a.mli
+	$(OCAMLC) -c -functor x.cmi -for-pack C -functor y.cmi a.ml
+	$(OCAMLC) -c -functor x.cmi -for-pack C -functor y.cmi b.ml
+	$(OCAMLC) -pack-functor Make -o c.$(CMO) -functor y.cmi b.$(CMO) \
+          || echo "****************    GOOD bad11: error detected    ***********"
+

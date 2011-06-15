@@ -44,7 +44,11 @@ let name i = i.name
 
 let stamp i = i.stamp
 
-let unique_toplevel_name i = i.name ^ "/" ^ string_of_int i.stamp
+let unique_toplevel_name i =
+  Printf.sprintf "%s%s/%d" i.name
+    (if i.flags land functor_arg_flag <> 0 then "(functor_arg)" else
+    if i.flags land functor_part_flag <> 0 then "(functor_part)" else "")
+    i.stamp
 
 let persistent i = (i.stamp = 0)
 
@@ -166,17 +170,23 @@ let rec find_stamp s = function
     None ->
       raise Not_found
   | Some k ->
-      if k.ident.stamp = s then k.data else find_stamp s k.previous
+      if k.ident (*.stamp*) = s then k.data else find_stamp s k.previous
+
+(* Fabrice: I removed the comparison of stamps, and replaced it by a
+   global comparison, as I couldn't find a good reason for ending up up
+   with the same stamp and different global/predef flags that you would
+   like to print in the same way. On the contrary, it is possible to
+   have the same stamp and different functor flags. *)
 
 let rec find_same id = function
-    Empty ->
-      raise Not_found
+Empty ->
+  raise Not_found
   | Node(l, k, r, _) ->
-      let c = compare id.name k.ident.name in
-      if c = 0 then
-        if id.stamp = k.ident.stamp
+    let c = compare id.name k.ident.name in
+    if c = 0 then
+      if id (*.stamp *) = k.ident (* .stamp *)
         then k.data
-        else find_stamp id.stamp k.previous
+        else find_stamp id (*.stamp *) k.previous
       else
         find_same id (if c < 0 then l else r)
 
