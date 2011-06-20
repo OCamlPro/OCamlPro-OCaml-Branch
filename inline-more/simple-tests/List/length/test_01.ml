@@ -3,12 +3,15 @@ open Externals
 let list_ints = [1;2;3;4;5;6;7;8;9;10]
 let list_floats = [1.;2.;3.;4.;5.;6.;7.;8.;9.;10.]
 
-let rec length_aux len = function
+
+let length l =
+  let rec length_aux len = function
     [] -> len
   | a::l ->
     length_aux (len + 1) l
 
-let length l = length_aux 0 l
+  in
+  length_aux 0 l
 
 let _ =
   if (length list_ints = 10) then

@@ -374,8 +374,8 @@ let make_float_alloc tag args =
 let fundecls_size fundecls =
   let sz = ref (-1) in
   List.iter
-    (fun (label, arity, params, body) ->
-      sz := !sz + 1 + (if arity = 1 then 2 else 3))
+    (fun (clos, body) ->
+      sz := !sz + 1 + (if clos.fun_arity = 1 then 2 else 3))
     fundecls;
   !sz
 
@@ -386,7 +386,7 @@ type rhs_kind =
 let rec expr_size = function
   | Uclosure(fundecls, clos_vars) ->
       RHS_block (fundecls_size fundecls + List.length clos_vars)
-  | Ulet(id, exp, _, body) ->
+  | Ulet(_, id, exp, _, body) ->
       expr_size body
   | Uletrec(bindings, body) ->
       expr_size body
@@ -450,7 +450,7 @@ let transl_constant = function
 (* Translate constant closures *)
 
 let constant_closures =
-  ref ([] : (string * (string * int * Ident.t list * ulambda) list) list)
+  ref ([] : (string * (function_description * ulambda) list) list)
 
 (* Boxed integers *)
 
@@ -795,7 +795,7 @@ let subst_boxed_number unbox_fn boxed_id unboxed_id exp =
 
 (* Translate an expression *)
 
-let functions = (Queue.create() : (string * Ident.t list * ulambda) Queue.t)
+let functions = (Queue.create() : (function_description * ulambda) Queue.t)
 
 let rec transl = function
     Uvar id ->
@@ -808,8 +808,8 @@ let rec transl = function
       let lbl = Compilenv.new_const_symbol() in
       constant_closures := (lbl, fundecls) :: !constant_closures;
       List.iter
-        (fun (label, arity, params, body) ->
-          Queue.add (label, params, body) functions)
+        (fun (clos, body) ->
+          Queue.add (clos, body) functions)
         fundecls;
       Cconst_symbol lbl
   | Uclosure(fundecls, clos_vars) ->
@@ -818,8 +818,8 @@ let rec transl = function
       let rec transl_fundecls pos = function
           [] ->
             List.map transl clos_vars
-        | (label, arity, params, body) :: rem ->
-            Queue.add (label, params, body) functions;
+        | ({ fun_arity = arity; fun_label = label } as clos, body) :: rem ->
+            Queue.add (clos, body) functions;
             let header =
               if pos = 0
               then alloc_closure_header block_size
@@ -867,7 +867,7 @@ let rec transl = function
               (List.map transl args) dbg
         | _ ->
             bind "met" (lookup_tag obj (transl met)) (call_met obj args))
-  | Ulet(id, exp, _, body) ->
+  | Ulet(_, id, exp, _, body) ->
       begin match is_unboxed_number exp with
         No_unboxing ->
           Clet(id, transl exp, transl body)
@@ -1545,7 +1545,7 @@ module StringSet =
 
 let rec transl_all_functions already_translated cont =
   try
-    let (lbl, params, body) = Queue.take functions in
+    let ({ fun_label = lbl; fun_params = params }, body) = Queue.take functions in
     if StringSet.mem lbl already_translated then
       transl_all_functions already_translated cont
     else begin
@@ -1682,10 +1682,10 @@ and emit_boxed_int64_constant n cont =
 let emit_constant_closure symb fundecls cont =
   match fundecls with
     [] -> assert false
-  | (label, arity, params, body) :: remainder ->
+  | ({ fun_label = label; fun_arity = arity; fun_params = params }, body) :: remainder ->
       let rec emit_others pos = function
         [] -> cont
-      | (label, arity, params, body) :: rem ->
+      | ({ fun_label = label; fun_arity = arity; fun_params = params }, body) :: rem ->
           if arity = 1 then
             Cint(infix_header pos) ::
             Csymbol_address label ::

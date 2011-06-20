@@ -22,7 +22,7 @@ open Asttypes
 open Lambda
 open Clambda
 open Format
-
+open Printlambda
 
 let rec approx ppf v =
   match v with
@@ -113,30 +113,15 @@ let rec lam ppf l =
         vars
         lam lhandler
 
-(*
-(* Strictness as disappeared *)
-  | Ulet(str, id, arg, body) ->
+  | Ulet(str, id, arg, app, body) ->
       let rec letbody = function
-        | Ulet(str, id, arg, body) ->
-            fprintf ppf "@ @[<2>%a%s@ %a@]" Ident.print id (string_of_let_kind str) lam arg;
+        | Ulet(str, id, arg, app, body) ->
+            fprintf ppf "@ @[<2>%a {%a} %s @ %a@]" Ident.print id approx app
+	      (string_of_kind str) lam arg;
             letbody body
         | expr -> expr in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a%s@ %a@]" Ident.print id (string_of_let_kind str) lam arg;
-      let expr = letbody body in
-      fprintf ppf ")@]@ %a)@]" lam expr
-*)
-  | Ulet(id, arg, app, body) ->
-      let rec letbody = function
-        | Ulet(id, arg, app, body) ->
-            fprintf ppf "@ @[<2>%s%a {%a} = @ %a@]" "" Ident.print id (* (string_of_let_kind str) *)
-	      approx app
-	      lam arg;
-            letbody body
-        | expr -> expr in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%s%a {%a} = @ %a@]" "" Ident.print id
- (* (string_of_let_kind str) *)
-	approx app
-	lam arg;
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a {%a} %s @ %a@]" Ident.print id approx app
+	(string_of_kind str) lam arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
 
@@ -175,17 +160,17 @@ let rec lam ppf l =
   | Uoffset (l, pos) ->
       fprintf ppf "@[<2>(offset[%d]@ %a)@]" pos lam l
 
-  | Uclosure (clos, (* env_pos, *) fvs) ->
+  | Uclosure (defs, fvs) ->
       let pr_params ppf params =
             List.iter (fun param -> fprintf ppf "@ %a" Ident.print param) params
       in
       let closures ppf largs =
-        List.iter (fun (fun_label, fun_arity, fun_params, ubody) ->
+        List.iter (fun (clos, body) ->
 		     fprintf ppf
 		       "@[<2>(%s(%d%s) %a@ @[<v 0>%a@])@]"
-		       fun_label fun_arity
+		       clos.fun_label clos.fun_arity
 		       "" (* (if clos.fun_closed then "" else "+c") *)
-		       pr_params fun_params lam ubody
+		       pr_params clos.fun_params lam body
 
 
 		  ) largs in
@@ -193,7 +178,7 @@ let rec lam ppf l =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
        fprintf ppf
        "@[<2>(closure @[<v 0>%a@] @[<v 0>{%d} %a@])@]"
-       closures clos 0 (* env_pos *) lams fvs
+       closures defs 0 (* env_pos *) lams fvs
 
 
 and sequence ppf = function

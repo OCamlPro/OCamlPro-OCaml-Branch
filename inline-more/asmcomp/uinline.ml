@@ -10,13 +10,11 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
+(***********************************************************************)
+(*                                                                     *)
+(*                    Contributed by OCamlPro                          *)
+(*                                                                     *)
+(***********************************************************************)
 
-open Lambda
+let optimize ulam = ulam
 
-open Format
-
-val string_of_kind : Lambda.let_kind -> string
-val structured_constant: formatter -> structured_constant -> unit
-val lambda: formatter -> lambda -> unit
-val primitive :  Format.formatter -> Lambda.primitive -> unit

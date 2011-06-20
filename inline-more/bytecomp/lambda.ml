@@ -25,7 +25,12 @@ type primitive =
   (* Operations on heap blocks *)
   | Pmakeblock of int * mutable_flag
   | Pfield of int
-  | Psetfield of int * bool * bool (* (position, maybe_pointer, setglobal_not_exported) *)
+(* Fabrice: Psetfield(position, maybe_pointer, setglobal_not_exported)
+  - setglobal_not_exported: used for values that are stored in the global map,
+      but not exported into the .cmi. Used to analyse when a function can be
+      inlined in simplif.ml, because it is only used in the module itself.
+*)
+  | Psetfield of int * bool * bool
   | Pfloatfield of int
   | Psetfloatfield of int
   | Pduprecord of Types.record_representation * int

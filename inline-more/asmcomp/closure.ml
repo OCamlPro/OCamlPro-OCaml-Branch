@@ -55,7 +55,7 @@ let occurs_var var u =
     | Ugeneric_apply(funct, args, _) -> occurs funct || List.exists occurs args
     | Uclosure(fundecls, clos) -> List.exists occurs clos
     | Uoffset(u, ofs) -> occurs u
-    | Ulet(id, def, _, body) -> occurs def || occurs body
+    | Ulet(_, id, def, _, body) -> occurs def || occurs body
     | Uletrec(decls, body) ->
         List.exists (fun (id, u) -> occurs u) decls || occurs body
     | Uprim(p, args, _) -> List.exists occurs args
@@ -136,7 +136,7 @@ let lambda_smaller lam threshold =
         raise Exit (* inlining would duplicate function definitions *)
     | Uoffset(lam, ofs) ->
         incr size; lambda_size lam
-    | Ulet(id, lam, _, body) ->
+    | Ulet(_, id, lam, _, body) ->
         lambda_size lam; lambda_size body
     | Uletrec(bindings, body) ->
         raise Exit (* usually too large *)
@@ -282,9 +282,9 @@ let rec substitute sb ulam =
            let rec body and use only the substituted term. *)
       Uclosure(defs, List.map (substitute sb) env)
   | Uoffset(u, ofs) -> Uoffset(substitute sb u, ofs)
-  | Ulet(id, u1, _, u2) ->
+  | Ulet(str, id, u1, _, u2) ->
       let id' = Ident.rename id in
-      Ulet(id', substitute sb u1, Value_unknown, substitute (Tbl.add id (Uvar id') sb) u2)
+      Ulet(str, id', substitute sb u1, Value_unknown, substitute (Tbl.add id (Uvar id') sb) u2)
   | Uletrec(bindings, body) ->
       let bindings1 =
         List.map (fun (id, rhs) -> (id, Ident.rename id, rhs)) bindings in
@@ -435,7 +435,7 @@ let rec bind_params_rec subst params args body =
         let p1' = Ident.rename p1 in
         let body' =
           bind_params_rec (Tbl.add p1 (Uvar p1') subst) pl al body in
-        if occurs_var p1 body then Ulet(p1', a1, Value_unknown, body')
+        if occurs_var p1 body then Ulet(Strict, p1', a1, Value_unknown, body')
         else if no_effects a1 then body'
         else Usequence(a1, body')
       end
@@ -465,7 +465,10 @@ let rec is_pure = function
  * purity. Instead, we implemented [ulambda_is_pure] to be able to test
  * purity on ulambda functions. *)
 (* OCamlPro: keep an approximation of the arguments in [uargs] *)
-let direct_apply fundesc ufunct uargs =
+let direct_apply :
+    Clambda.function_description -> Clambda.ulambda
+  -> (Clambda.ulambda * Clambda.value_approximation) list -> Clambda.ulambda =
+  fun fundesc ufunct uargs ->
   let uargs =
     if fundesc.fun_closed then uargs else uargs @ [ufunct, Value_unknown ] in
   let app_args = List.map fst uargs in
@@ -619,7 +622,7 @@ let rec close fenv cenv = function
 	      [] -> body
 	    | (arg_id, arg_lam, arg_approx) :: args ->
 	      iter args
-		(Ulet ( arg_id, arg_lam, arg_approx, body))
+		(Ulet (Strict, arg_id, arg_lam, arg_approx, body))
 	in
 	let internal_args =
 	  (List.map (fun (arg_id, arg_lam, arg_approx) ->
@@ -650,7 +653,7 @@ let rec close fenv cenv = function
 		  Uvar arg_name -> (arg_name, (fun app -> app))
 		| _ ->
 		  let arg_name = Ident.create "arg" in
-		  (arg_name, fun app -> Ulet( arg_name, uarg, arg_approx, app))
+		  (arg_name, fun app -> Ulet( Strict, arg_name, uarg, arg_approx, app))
 	      in
               let arg_approx =
 		match arg_approx with
@@ -687,13 +690,13 @@ let rec close fenv cenv = function
     begin match (str, alam) with
         (Variable, _) ->
           let (ubody, abody) = close fenv cenv body in
-          (Ulet(id, ulam, alam, ubody), abody)
+          (Ulet(Variable, id, ulam, alam, ubody), abody)
       | (_, (Value_integer _ | Value_constptr _))
           when str = Alias || is_pure lam ->
         close (Tbl.add id alam fenv) cenv body
       | (_, _) ->
         let (ubody, abody) = close (Tbl.add id alam fenv) cenv body in
-        (Ulet(id, ulam, alam, ubody), abody)
+        (Ulet(str, id, ulam, alam, ubody), abody)
     end
   | Lletrec(defs, body) ->
     if List.for_all
@@ -713,7 +716,7 @@ let rec close fenv cenv = function
             (fun (id, pos, approx) sb ->
               Tbl.add id (Uoffset(Uvar clos_ident, pos)) sb)
             infos Tbl.empty in
-        (Ulet(clos_ident, clos, approx, substitute sb ubody),
+        (Ulet(Strict, clos_ident, clos, approx, substitute sb ubody),
          approx)
       end else begin
         (* General case: recursive definition of values *)
@@ -853,6 +856,7 @@ and close_functions fenv cenv fun_defs =
               {fun_label = label;
                fun_arity = (if kind = Tupled then -arity else arity);
                fun_closed = initially_closed;
+	       fun_params = params;
                fun_inline = None } in
             (id, params, body, fundesc)
         | (_, _) -> fatal_error "Closure.close_functions")
@@ -889,7 +893,7 @@ and close_functions fenv cenv fun_defs =
     let (ubody, approx) = close fenv_rec cenv_body body in
     if !useless_env && occurs_var env_param ubody then useless_env := false;
     let fun_params = if !useless_env then params else params @ [env_param] in
-    ((fundesc.fun_label, fundesc.fun_arity, fun_params, ubody),
+    (({ fundesc with fun_params = fun_params }, ubody),
      (id, env_pos, Value_closure(fundesc, approx))) in
   (* Translate all function definitions. *)
   let clos_info_list =
@@ -919,11 +923,11 @@ and close_functions fenv cenv fun_defs =
 
 and close_one_function fenv cenv id funct =
   match close_functions fenv cenv [id, funct] with
-      ((Uclosure([_, _, params, body], _) as clos),
+      ((Uclosure([cl, body], _) as clos),
        [_, _, (Value_closure(fundesc, _) as approx)]) ->
         (* See if the function can be inlined *)
-        if lambda_smaller body (!Clflags.inline_threshold + List.length params)
-        then fundesc.fun_inline <- Some(params, body);
+        if lambda_smaller body (!Clflags.inline_threshold + List.length cl.fun_params)
+        then fundesc.fun_inline <- Some(cl.fun_params, body);
         (clos, approx)
     | _ -> fatal_error "Closure.close_one_function"
 

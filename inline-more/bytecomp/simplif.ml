@@ -576,6 +576,6 @@ let simplify_lambda lam =
   simplify_lets
        (* Must be done after simplify_exits, because simplify_exits assumes
 	  exits always appear in tailcall !!! *)
-       (Rectoloop.simplify
-    (simplify_exits
+    (Rectoloop.simplify
+       (simplify_exits
 	  lam))

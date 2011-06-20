@@ -119,7 +119,7 @@ let computed2 =
 (data int 2048 global "camlCode" "camlCode": skip 16)
 (data
  int 3319
- "camlCode__3":
+ "camlCode__2":
  addr "caml_curry2"
  int 5
  addr "camlCode__iter1_1039")
@@ -130,39 +130,8 @@ let computed2 =
  int 5
  addr "camlCode__iter1_1031")
 (data
- global "camlCode__1"
  int 2048
  "camlCode__1":
- int 3
- addr L14
- int 2048
- L14:
- int 5
- addr L15
- int 2048
- L15:
- int 7
- addr L16
- int 2048
- L16:
- int 9
- addr L17
- int 2048
- L17:
- int 11
- int 1)
-(data
- global "camlCode__2"
- int 2048
- "camlCode__2":
- addr L5
- addr L6
- int 2048
- L6:
- addr L7
- addr L8
- int 2048
- L8:
  addr L9
  addr L10
  int 2048
@@ -172,27 +141,56 @@ let computed2 =
  int 2048
  L12:
  addr L13
+ addr L14
+ int 2048
+ L14:
+ addr L15
+ addr L16
+ int 2048
+ L16:
+ addr L17
  int 1
  int 2048
- L13:
+ L17:
  int 11
  int 13
  int 2048
- L11:
+ L15:
  int 9
  int 11
  int 2048
- L9:
+ L13:
  int 7
  int 7
  int 2048
- L7:
+ L11:
  int 5
  int 7
  int 2048
- L5:
+ L9:
  int 3
  int 5)
+(data
+ int 2048
+ "camlCode__3":
+ int 3
+ addr L5
+ int 2048
+ L5:
+ int 5
+ addr L6
+ int 2048
+ L6:
+ int 7
+ addr L7
+ int 2048
+ L7:
+ int 9
+ addr L8
+ int 2048
+ L8:
+ int 11
+ int 1)
 (function camlCode__iter1_1031 (f/1032: addr l/1033: addr)
  (if (!= l/1033 1)
    (seq (app (load f/1032) (load l/1033) f/1032 unit)
@@ -221,15 +219,15 @@ let computed2 =
    computed1/1030
      (let (clos/1052 "camlCode__4" list1/1056 (alloc 1024 1a))
        (app "camlCode__iter1_1031"
-         (alloc 3319 "camlCode__fun_1053" 3 list1/1056) "camlCode__1" unit)
+         (alloc 3319 "camlCode__fun_1053" 3 list1/1056) "camlCode__3" unit)
        (load list1/1056))
    (store "camlCode" computed1/1030))
  (let
    computed2/1038
-     (let (clos/1058 "camlCode__3" list1/1062 (alloc 1024 1a))
+     (let (clos/1058 "camlCode__2" list1/1062 (alloc 1024 1a))
        (app "camlCode__iter1_1039"
          (alloc 4343 "caml_tuplify2" -3 "camlCode__fun_1059" list1/1062)
-         "camlCode__2" unit)
+         "camlCode__1" unit)
        (load list1/1062))
    (store (+a "camlCode" 8) computed2/1038))
  1a)
@@ -324,14 +322,14 @@ camlCode__entry:
   [A/31[%rax]] := A/32[%rbx]
   [A/31[%rax] + 8] := 3
   [A/31[%rax] + 16] := list1/30[%rdi]
-  A/33[%rbx] := "camlCode__1"
+  A/33[%rbx] := "camlCode__3"
   {spilled-list1/46[s0]*}
   call "camlCode__iter1_1031" R/0[%rax] R/1[%rbx]
   list1/47[%rax] := spilled-list1/46[s0] (reload)
   computed1/34[%rbx] := [list1/47[%rax]]
   A/35[%rax] := "camlCode"
   [A/35[%rax]] := computed1/34[%rbx]
-  clos/36[%rax] := "camlCode__3"
+  clos/36[%rax] := "camlCode__2"
   {}
   list1/37[%rdi] := alloc 56
   spilled-list1/45[s0] := list1/37[%rdi] (spill)
@@ -345,7 +343,7 @@ camlCode__entry:
   A/40[%rbx] := "camlCode__fun_1059"
   [A/38[%rax] + 16] := A/40[%rbx]
   [A/38[%rax] + 24] := list1/37[%rdi]
-  A/41[%rbx] := "camlCode__2"
+  A/41[%rbx] := "camlCode__1"
   {spilled-list1/45[s0]*}
   call "camlCode__iter1_1039" R/0[%rax] R/1[%rbx]
   list1/48[%rax] := spilled-list1/45[s0] (reload)
@@ -375,7 +373,7 @@ camlCode:
 	.space	16
 	.data
 	.quad	3319
-camlCode__3:
+camlCode__2:
 	.quad	caml_curry2
 	.quad	5
 	.quad	camlCode__iter1_1039
@@ -386,39 +384,8 @@ camlCode__4:
 	.quad	5
 	.quad	camlCode__iter1_1031
 	.data
-	.globl	camlCode__1
 	.quad	2048
 camlCode__1:
-	.quad	3
-	.quad	.L100014
-	.quad	2048
-.L100014:
-	.quad	5
-	.quad	.L100015
-	.quad	2048
-.L100015:
-	.quad	7
-	.quad	.L100016
-	.quad	2048
-.L100016:
-	.quad	9
-	.quad	.L100017
-	.quad	2048
-.L100017:
-	.quad	11
-	.quad	1
-	.data
-	.globl	camlCode__2
-	.quad	2048
-camlCode__2:
-	.quad	.L100005
-	.quad	.L100006
-	.quad	2048
-.L100006:
-	.quad	.L100007
-	.quad	.L100008
-	.quad	2048
-.L100008:
 	.quad	.L100009
 	.quad	.L100010
 	.quad	2048
@@ -428,27 +395,56 @@ camlCode__2:
 	.quad	2048
 .L100012:
 	.quad	.L100013
+	.quad	.L100014
+	.quad	2048
+.L100014:
+	.quad	.L100015
+	.quad	.L100016
+	.quad	2048
+.L100016:
+	.quad	.L100017
 	.quad	1
 	.quad	2048
-.L100013:
+.L100017:
 	.quad	11
 	.quad	13
 	.quad	2048
-.L100011:
+.L100015:
 	.quad	9
 	.quad	11
 	.quad	2048
-.L100009:
+.L100013:
 	.quad	7
 	.quad	7
 	.quad	2048
-.L100007:
+.L100011:
 	.quad	5
 	.quad	7
 	.quad	2048
-.L100005:
+.L100009:
 	.quad	3
 	.quad	5
+	.data
+	.quad	2048
+camlCode__3:
+	.quad	3
+	.quad	.L100005
+	.quad	2048
+.L100005:
+	.quad	5
+	.quad	.L100006
+	.quad	2048
+.L100006:
+	.quad	7
+	.quad	.L100007
+	.quad	2048
+.L100007:
+	.quad	9
+	.quad	.L100008
+	.quad	2048
+.L100008:
+	.quad	11
+	.quad	1
 	.text
 	.align	16
 	.globl	camlCode__iter1_1031
@@ -575,14 +571,14 @@ camlCode__entry:
 	movq	%rbx, (%rax)
 	movq	$3, 8(%rax)
 	movq	%rdi, 16(%rax)
-	movq	camlCode__1@GOTPCREL(%rip), %rbx
+	movq	camlCode__3@GOTPCREL(%rip), %rbx
 	call	camlCode__iter1_1031@PLT
 .L116:
 	movq	0(%rsp), %rax
 	movq	(%rax), %rbx
 	movq	camlCode@GOTPCREL(%rip), %rax
 	movq	%rbx, (%rax)
-	movq	camlCode__3@GOTPCREL(%rip), %rax
+	movq	camlCode__2@GOTPCREL(%rip), %rax
 	movq	$56, %rax
 	call	caml_allocN@PLT
 .L117:
@@ -598,7 +594,7 @@ camlCode__entry:
 	movq	camlCode__fun_1059@GOTPCREL(%rip), %rbx
 	movq	%rbx, 16(%rax)
 	movq	%rdi, 24(%rax)
-	movq	camlCode__2@GOTPCREL(%rip), %rbx
+	movq	camlCode__1@GOTPCREL(%rip), %rbx
 	call	camlCode__iter1_1039@PLT
 .L118:
 	movq	0(%rsp), %rax

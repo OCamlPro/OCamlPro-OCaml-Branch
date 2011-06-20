@@ -25,10 +25,9 @@ type ulambda =
   | Uconst of structured_constant * string option
   | Udirect_apply of function_label * ulambda list * Debuginfo.t
   | Ugeneric_apply of ulambda * ulambda list * Debuginfo.t
-  | Uclosure of (function_label * int * Ident.t list * ulambda) list
-              * ulambda list
+  | Uclosure of (function_description * ulambda) list * ulambda list
   | Uoffset of ulambda * int
-  | Ulet of Ident.t * ulambda * value_approximation * ulambda
+  | Ulet of let_kind * Ident.t * ulambda * value_approximation * ulambda
   | Uletrec of (Ident.t * ulambda) list * ulambda
   | Uprim of primitive * ulambda list * Debuginfo.t
   | Uswitch of ulambda * ulambda_switch
@@ -53,6 +52,7 @@ and ulambda_switch =
 and function_description =
   { fun_label: function_label;          (* Label of direct entry point *)
     fun_arity: int;                     (* Number of arguments *)
+    fun_params : Ident.t list;
     mutable fun_closed: bool;           (* True if environment not used *)
     mutable fun_inline: (Ident.t list * ulambda) option }
 

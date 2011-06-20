@@ -405,13 +405,19 @@ bytecomp/printlambda.cmo: typing/types.cmi typing/primitive.cmi \
 bytecomp/printlambda.cmx: typing/types.cmx typing/primitive.cmx \
     parsing/location.cmx bytecomp/lambda.cmx typing/ident.cmx \
     parsing/asttypes.cmi bytecomp/printlambda.cmi
-bytecomp/rectoloop.cmo: bytecomp/lambda.cmi bytecomp/rectoloop.cmi
-bytecomp/rectoloop.cmx: bytecomp/lambda.cmx bytecomp/rectoloop.cmi
+bytecomp/rectoloop.cmo: utils/tbl.cmi bytecomp/printlambda.cmi \
+    parsing/location.cmi bytecomp/lambda.cmi typing/ident.cmi \
+    utils/clflags.cmi parsing/asttypes.cmi bytecomp/rectoloop.cmi
+bytecomp/rectoloop.cmx: utils/tbl.cmx bytecomp/printlambda.cmx \
+    parsing/location.cmx bytecomp/lambda.cmx typing/ident.cmx \
+    utils/clflags.cmx parsing/asttypes.cmi bytecomp/rectoloop.cmi
 bytecomp/runtimedef.cmo: bytecomp/runtimedef.cmi
 bytecomp/runtimedef.cmx: bytecomp/runtimedef.cmi
-bytecomp/simplif.cmo: bytecomp/lambda.cmi typing/ident.cmi utils/clflags.cmi \
+bytecomp/simplif.cmo: utils/tbl.cmi bytecomp/rectoloop.cmi \
+    bytecomp/lambda.cmi typing/ident.cmi utils/clflags.cmi \
     parsing/asttypes.cmi bytecomp/simplif.cmi
-bytecomp/simplif.cmx: bytecomp/lambda.cmx typing/ident.cmx utils/clflags.cmx \
+bytecomp/simplif.cmx: utils/tbl.cmx bytecomp/rectoloop.cmx \
+    bytecomp/lambda.cmx typing/ident.cmx utils/clflags.cmx \
     parsing/asttypes.cmi bytecomp/simplif.cmi
 bytecomp/switch.cmo: bytecomp/switch.cmi
 bytecomp/switch.cmx: bytecomp/switch.cmi
@@ -714,6 +720,12 @@ asmcomp/split.cmo: asmcomp/reg.cmi utils/misc.cmi asmcomp/mach.cmi \
     asmcomp/split.cmi
 asmcomp/split.cmx: asmcomp/reg.cmx utils/misc.cmx asmcomp/mach.cmx \
     asmcomp/split.cmi
+asmcomp/uinline.cmo:
+asmcomp/uinline.cmx:
+asmcomp/usimplif.cmo: utils/tbl.cmi bytecomp/lambda.cmi asmcomp/clambda.cmi \
+    parsing/asttypes.cmi
+asmcomp/usimplif.cmx: utils/tbl.cmx bytecomp/lambda.cmx asmcomp/clambda.cmx \
+    parsing/asttypes.cmi
 driver/compile.cmi: typing/env.cmi
 driver/errors.cmi:
 driver/main.cmi:

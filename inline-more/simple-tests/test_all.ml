@@ -1,4 +1,4 @@
-#!/usr/bin/ocaml
+#!../boot/ocamlrun ../ocaml
 
 #load "unix.cma";;
 
@@ -12,6 +12,13 @@ let test_ocamlc = ref false
 let test_ocamlopt = ref false
 let test_ocamlc_opt = ref false
 let test_ocamlopt_opt = ref false
+;;
+
+#use "../tests_config.ml"
+;;
+
+let _ =
+  more_flags := List.rev !more_flags
 
 let arg_list = [
   "-f", Arg.String (fun s -> more_flags := s :: !more_flags), " <flag> : add a flag to the compiler";
