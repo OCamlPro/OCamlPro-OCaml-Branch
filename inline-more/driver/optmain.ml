@@ -141,7 +141,8 @@ module Options = Main_args.Make_optcomp_options (struct
   let _warn_error s = Warnings.parse_options true s
   let _warn_help = Warnings.help_warnings
   let _where () = print_standard_library ()
-  let _debug = Clflags.set_debug
+  let _debug = Clflags.set_flags Clflags.debug_flags
+  let _O = Clflags.set_flags Clflags.optim_flags
 
   let _nopervasives = set nopervasives
   let _dparsetree = set dump_parsetree

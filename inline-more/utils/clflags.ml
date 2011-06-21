@@ -14,41 +14,68 @@
 
 (* Command-line parameters *)
 
+type flag_table = (string, (bool ref * string) list) Hashtbl.t
 
 let debug_flags = Hashtbl.create 13
+let optim_flags = Hashtbl.create 13
 
-let add_debug_flag name refs =
-  Hashtbl.add debug_flags name refs
+let new_flag table name help =
+  let ref = ref false in
+  try
+    let flags = Hashtbl.find table name in
+    Hashtbl.remove table name;
+    Hashtbl.add table name ( (ref, help) :: flags);
+    ref
+  with Not_found ->
+    Hashtbl.add table name [ (ref, help) ];
+    ref
 
-let set_debug s v =
+let set_flag table s v =
   if s = "all" then begin
-    Hashtbl.iter (fun _ refs -> List.iter (fun r -> r := v) refs) debug_flags
+    Hashtbl.iter (fun _ refs -> List.iter (fun (r,_) -> r := v) refs) table
   end
   else
   try
-    let refs = Hashtbl.find debug_flags s in
-    List.iter (fun r -> r := v) refs
+    let refs = Hashtbl.find table s in
+    List.iter (fun (r,_) -> r := v) refs
   with Not_found ->
-    Printf.fprintf stderr "Warning: '%s' no such debug flag\n%!" s
+    Printf.fprintf stderr "Warning: '%s' no such flag\n%!" s
 
-let set_debug x =
+let set_flag table x =
   let len = String.length x in
   if len > 0 then
     match x.[0] with
-      |	'+' -> set_debug (String.sub x 1 (len-1)) true
-      |	'-' -> set_debug (String.sub x 1 (len-1)) false
-      | _ -> set_debug x true
+      |	'+' -> set_flag table (String.sub x 1 (len-1)) true
+      |	'-' -> set_flag table (String.sub x 1 (len-1)) false
+      | _ -> set_flag table x true
 
-let set_debug x =
+let set_flags table x =
+  if x = "help" || x = "?" then begin
+    Format.eprintf "@[<v 3>available flags:@;";
+    let msgs = ref [] in
+    Hashtbl.iter (fun key list ->
+      msgs := (key, list) :: !msgs
+    ) table;
+    List.iter (fun (key,list) ->
+      Format.eprintf "@[<v 5>%s@;" key;
+      List.iter (fun (r, msg) ->
+	Format.eprintf "%s@;" msg;
+	Format.eprintf "   (default %b)@," !r;
+      ) list;
+      Format.eprintf "@]@;";
+    ) (List.sort compare !msgs);
+    Format.eprintf "@]@.";
+    exit 2
+  end else
   let len = String.length x in
   let rec iter pos =
     if pos < len then
       try
 	let pos2 = String.index_from x pos ',' in
-	set_debug (String.sub x pos (pos2-pos));
+	set_flag table (String.sub x pos (pos2-pos));
 	iter (pos2+1)
       with Not_found ->
-	set_debug (String.sub x pos (len-pos))
+	set_flag table (String.sub x pos (len-pos))
   in
   iter 0
 

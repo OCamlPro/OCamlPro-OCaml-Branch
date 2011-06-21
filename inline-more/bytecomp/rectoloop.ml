@@ -64,9 +64,13 @@ let ppf = Format.err_formatter
 
 module IntSet = Set.Make(struct type t = int let compare = compare end)
 
-let debug_rec2loop = ref false
-let _ =
-  Clflags.add_debug_flag "rec2loop" [ debug_rec2loop ]
+let debug_rec2loop = Clflags.new_flag Clflags.debug_flags "rec2loop"
+  "debug rec2loop transform"
+
+let optim_rec2loop = Clflags.new_flag Clflags.optim_flags "rec2loop"
+  "Transform tail-recursive functions into loops before inlining"
+
+let _ = optim_rec2loop := true
 
 let const_true = Lconst (Const_pointer 1)
 let const_false = Lconst (Const_pointer 0)
@@ -851,42 +855,45 @@ and elim_tailcall_none env lam =
   } lam
 
 let simplify lam =
-  let fun_def = {
-    fun_id = Ident.create "";
-    fun_args = [];
-    fun_approx_args = [||];
-    fun_nargs = 0;
-    fun_orig_body = lam;
-    fun_final_body = lam;
-    fun_callers = Tbl.empty;
-    fun_callees = Tbl.empty;
-    fun_escapes = true;
-    fun_mut_rec = false;
-    fun_self_rec = false;
-    fun_self = false;
-    fun_final_args = [];
-    fun_exported = false;
-    fun_exttail = Tbl.empty;
-  } in
+  if !optim_rec2loop then
+    let fun_def = {
+      fun_id = Ident.create "";
+      fun_args = [];
+      fun_approx_args = [||];
+      fun_nargs = 0;
+      fun_orig_body = lam;
+      fun_final_body = lam;
+      fun_callers = Tbl.empty;
+      fun_callees = Tbl.empty;
+      fun_escapes = true;
+      fun_mut_rec = false;
+      fun_self_rec = false;
+      fun_self = false;
+      fun_final_args = [];
+      fun_exported = false;
+      fun_exttail = Tbl.empty;
+    } in
 
-  if !debug_rec2loop then begin
-    Format.fprintf ppf "Before rec2loop\n";
-    Printlambda.lambda ppf lam;
-  end;
+    if !debug_rec2loop then begin
+      Format.fprintf ppf "Before rec2loop\n";
+      Printlambda.lambda ppf lam;
+    end;
 
-  let lam =
-    elim_tailcall_none {
-      env_fun = fun_def;
-      env_bv = Tbl.empty;
-      env_defs = Tbl.empty;
-    }
-      lam
-  in
+    let lam =
+      elim_tailcall_none {
+	env_fun = fun_def;
+	env_bv = Tbl.empty;
+	env_defs = Tbl.empty;
+      }
+	lam
+    in
 
-  if !debug_rec2loop then begin
-    Format.fprintf ppf "After rec2loop\n";
-    Printlambda.lambda ppf lam;
-    Format.fprintf ppf "@.";
-  end;
+    if !debug_rec2loop then begin
+      Format.fprintf ppf "After rec2loop\n";
+      Printlambda.lambda ppf lam;
+      Format.fprintf ppf "@.";
+    end;
 
-  lam
+    lam
+
+  else lam

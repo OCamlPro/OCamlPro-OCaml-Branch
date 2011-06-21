@@ -373,6 +373,9 @@ let mk_dstartup f =
 let mk_debug f =
   "-debug", Arg.String f, " <flags> : set debug flags"
 
+let mk_O f =
+  "-O", Arg.String f, " <flags> : set optim flags"
+
 let mk__ f =
   "-", Arg.String f,
   "<file>  Treat <file> as a file name (even if it starts with `-')"
@@ -423,6 +426,7 @@ module type Bytecomp_options = sig
   val _warn_help : unit -> unit
   val _where : unit -> unit
   val _debug : string -> unit
+  val _O : string -> unit
 
   val _nopervasives : unit -> unit
   val _use_prims : string -> unit
@@ -453,6 +457,7 @@ module type Bytetop_options = sig
   val _warn_error : string -> unit
   val _warn_help : unit -> unit
   val _debug : string -> unit
+  val _O : string -> unit
 
   val _dparsetree : unit -> unit
   val _drawlambda : unit -> unit
@@ -508,6 +513,7 @@ module type Optcomp_options = sig
   val _warn_help : unit -> unit
   val _where : unit -> unit
   val _debug : string -> unit
+  val _O : string -> unit
 
   val _nopervasives : unit -> unit
   val _dparsetree : unit -> unit
@@ -553,6 +559,7 @@ module type Opttop_options = sig
   val _warn_error : string -> unit
   val _warn_help : unit -> unit
   val _debug : string -> unit
+  val _O : string -> unit
 
   val _dparsetree : unit -> unit
   val _drawlambda : unit -> unit
@@ -632,6 +639,7 @@ struct
     mk_warn_help F._warn_help;
     mk_where F._where;
     mk_debug F._debug;
+    mk_O F._O;
 
     mk_nopervasives F._nopervasives;
     mk_use_prims F._use_prims;
@@ -665,6 +673,7 @@ struct
     mk_warn_error F._warn_error;
     mk_warn_help F._warn_help;
     mk_debug F._debug;
+    mk_O F._O;
 
     mk_dparsetree F._dparsetree;
     mk_drawlambda F._drawlambda;
@@ -724,6 +733,7 @@ struct
     mk_warn_help F._warn_help;
     mk_where F._where;
     mk_debug F._debug;
+    mk_O F._O;
 
     mk_nopervasives F._nopervasives;
     mk_dparsetree F._dparsetree;
@@ -770,6 +780,7 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_warn_error F._warn_error;
     mk_warn_help F._warn_help;
     mk_debug F._debug;
+    mk_O F._O;
 
     mk_dparsetree F._dparsetree;
     mk_drawlambda F._drawlambda;

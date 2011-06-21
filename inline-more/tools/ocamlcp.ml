@@ -93,6 +93,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _dlambda = option "-dlambda"
   let _dinstr = option "-dinstr"
   let _debug = option_with_arg "-debug"
+  let _O = option_with_arg "-O"
   let anonymous = process_file
 end);;
 

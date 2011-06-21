@@ -12,8 +12,13 @@
 
 (* $Id$ *)
 
-val set_debug : string -> unit
-val add_debug_flag : string -> bool ref list -> unit
+type flag_table
+
+val debug_flags : flag_table
+val optim_flags : flag_table
+
+val set_flags : flag_table -> string -> unit
+val new_flag : flag_table -> string -> string -> bool ref
 
 val objfiles : string list ref
 val ccobjs : string list ref
