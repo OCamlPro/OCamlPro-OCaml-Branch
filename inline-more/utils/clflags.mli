@@ -18,7 +18,7 @@ val debug_flags : flag_table
 val optim_flags : flag_table
 
 val set_flags : flag_table -> string -> unit
-val new_flag : flag_table -> string -> string -> bool ref
+val new_flag : flag_table -> string -> bool -> string -> bool ref
 
 val objfiles : string list ref
 val ccobjs : string list ref

@@ -104,6 +104,8 @@ let compile_implementation ?toplevel prefixname ppf (size, lam) =
     Emitaux.output_channel := oc;
     Emit.begin_assembly();
     let ulam = Closure.intro size lam in
+    let ulam = Uinline.optimize ulam in
+    let ulam = Usimplif.optimize ulam in
     Printclambda.print_ulambda_if ppf !dump_closure "After closure conversion"
       ulam;
     ulam

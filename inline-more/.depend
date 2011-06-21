@@ -520,6 +520,8 @@ asmcomp/selectgen.cmi: utils/tbl.cmi asmcomp/reg.cmi asmcomp/mach.cmi \
 asmcomp/selection.cmi: asmcomp/mach.cmi asmcomp/cmm.cmi
 asmcomp/spill.cmi: asmcomp/mach.cmi
 asmcomp/split.cmi: asmcomp/mach.cmi
+asmcomp/uinline.cmi:
+asmcomp/usimplif.cmi:
 asmcomp/arch.cmo:
 asmcomp/arch.cmx:
 asmcomp/asmgen.cmo: bytecomp/translmod.cmi asmcomp/split.cmi \
@@ -720,12 +722,12 @@ asmcomp/split.cmo: asmcomp/reg.cmi utils/misc.cmi asmcomp/mach.cmi \
     asmcomp/split.cmi
 asmcomp/split.cmx: asmcomp/reg.cmx utils/misc.cmx asmcomp/mach.cmx \
     asmcomp/split.cmi
-asmcomp/uinline.cmo:
-asmcomp/uinline.cmx:
+asmcomp/uinline.cmo: asmcomp/uinline.cmi
+asmcomp/uinline.cmx: asmcomp/uinline.cmi
 asmcomp/usimplif.cmo: utils/tbl.cmi bytecomp/lambda.cmi asmcomp/clambda.cmi \
-    parsing/asttypes.cmi
+    parsing/asttypes.cmi asmcomp/usimplif.cmi
 asmcomp/usimplif.cmx: utils/tbl.cmx bytecomp/lambda.cmx asmcomp/clambda.cmx \
-    parsing/asttypes.cmi
+    parsing/asttypes.cmi asmcomp/usimplif.cmi
 driver/compile.cmi: typing/env.cmi
 driver/errors.cmi:
 driver/main.cmi:

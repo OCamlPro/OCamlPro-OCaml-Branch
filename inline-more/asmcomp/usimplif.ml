@@ -85,6 +85,11 @@ let clambda_iter f ulam =
       List.iter (fun (clos, ubody) -> f ubody) defs; List.iter f env
 
 
+let debug_elim = Clflags.new_flag Clflags.debug_flags "refelim" false
+  "debug reference elimination after closure conversion"
+let optim_elim = Clflags.new_flag Clflags.optim_flags "refelim" true
+  "transform references into variables when they do not escape"
+
 let eliminate_ref ulam =
 
       (* first pass: find references and check whether they can escape *)
@@ -138,4 +143,6 @@ let eliminate_ref ulam =
     ulam
 
 let optimize ulam =
-  eliminate_ref ulam
+  if !optim_elim then
+    eliminate_ref ulam
+  else ulam

@@ -19,8 +19,8 @@ type flag_table = (string, (bool ref * string) list) Hashtbl.t
 let debug_flags = Hashtbl.create 13
 let optim_flags = Hashtbl.create 13
 
-let new_flag table name help =
-  let ref = ref false in
+let new_flag table name v help  =
+  let ref = ref v in
   try
     let flags = Hashtbl.find table name in
     Hashtbl.remove table name;

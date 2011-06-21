@@ -64,13 +64,11 @@ let ppf = Format.err_formatter
 
 module IntSet = Set.Make(struct type t = int let compare = compare end)
 
-let debug_rec2loop = Clflags.new_flag Clflags.debug_flags "rec2loop"
+let debug_rec2loop = Clflags.new_flag Clflags.debug_flags "rec2loop" false
   "debug rec2loop transform"
 
-let optim_rec2loop = Clflags.new_flag Clflags.optim_flags "rec2loop"
+let optim_rec2loop = Clflags.new_flag Clflags.optim_flags "rec2loop" true
   "Transform tail-recursive functions into loops before inlining"
-
-let _ = optim_rec2loop := true
 
 let const_true = Lconst (Const_pointer 1)
 let const_false = Lconst (Const_pointer 0)
