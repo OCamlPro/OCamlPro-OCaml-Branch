@@ -27,9 +27,14 @@ let clambda_map f ulam =
     | Uvar _ -> ulam
     | Uconst _ -> ulam
     | Ugeneric_apply(funct, args, debug) ->
-      Ugeneric_apply (f funct, List.map f args, debug)
+      let funct = f funct in
+      let args = List.map f args in
+      Ugeneric_apply (funct, args, debug)
     | Uoffset(u, ofs) -> Uoffset (f u, ofs)
-    | Ulet(str, id, def, approx, body) -> Ulet (str, id, f def, approx, f body)
+    | Ulet(str, id, def, approx, body) ->
+      let def = f def in
+      let body = f body in
+      Ulet (str, id, def, approx, body)
     | Uletrec(decls, body) -> Uletrec (List.map (fun (id, u) ->
       (id, f u)) decls, f body)
     | Uprim(p, args, debug) -> Uprim (p, List.map f args, debug)
