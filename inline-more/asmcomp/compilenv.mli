@@ -55,6 +55,7 @@ val new_const_symbol : unit -> string
 val new_const_label : unit -> int
 val new_structured_constant : Lambda.structured_constant -> bool -> string
 val structured_constants : unit -> (string * bool * Lambda.structured_constant) list
+val const_is_mutable : Lambda.structured_constant -> bool
 
 val read_unit_info: string -> unit_infos * Digest.t
         (* Read infos and CRC from a [.cmx] file. *)

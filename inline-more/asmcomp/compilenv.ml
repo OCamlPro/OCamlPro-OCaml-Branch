@@ -29,7 +29,8 @@ exception Error of error
 let global_infos_table =
   (Hashtbl.create 17 : (string, unit_infos option) Hashtbl.t)
 
-let structured_constants = ref ([] : (string * bool * Lambda.structured_constant) list)
+let structured_constants =
+  (Hashtbl.create 17 : (Lambda.structured_constant * bool * int, string) Hashtbl.t)
 
 let current_unit =
   { ui_name = "";
@@ -70,7 +71,7 @@ let reset ?packname name =
   current_unit.ui_apply_fun <- [];
   current_unit.ui_send_fun <- [];
   current_unit.ui_force_link <- false;
-  structured_constants := []
+  Hashtbl.clear structured_constants
 
 let current_unit_infos () =
   current_unit
@@ -204,7 +205,20 @@ let save_unit_info filename =
   current_unit.ui_imports_cmi <- Env.imported_units();
   write_unit_info current_unit filename
 
+open Asttypes
+open Lambda
+let rec const_is_mutable cst =
+  match cst with
+      Const_base _ -> false
+    | Const_pointer _ -> false
+    | Const_immstring _ -> true
+    | Const_block (Immutable, _, args) -> List.exists const_is_mutable args
+    | Const_block (Mutable, _, _) -> true
+    | Const_float_array _ -> true
 
+(* [mutable_const_counter] is used to distinguish equivalent mutable const so
+ that they are not shared. *)
+let mutable_const_counter = ref 0
 
 let const_label = ref 0
 
@@ -217,11 +231,23 @@ let new_const_symbol () =
   make_symbol (Some (string_of_int !const_label))
 
 let new_structured_constant cst global =
-  let lbl = new_const_symbol() in
-  structured_constants := (lbl, global, cst) :: !structured_constants;
-  lbl
+  let num =
+    if const_is_mutable cst then (incr mutable_const_counter; !mutable_const_counter)
+    else 0
+  in
+  try
+    Hashtbl.find  structured_constants (cst, global, num)
+  with Not_found ->
+    let lbl = new_const_symbol() in
+    Hashtbl.add structured_constants (cst, global, num) lbl;
+    lbl
 
-let structured_constants () = !structured_constants
+let structured_constants () =
+  let list = ref [] in
+  Hashtbl.iter (fun (cst, global, _) lbl ->
+    list := (lbl, global, cst) :: !list
+  ) structured_constants;
+  !list
 
 (* Error report *)
 
