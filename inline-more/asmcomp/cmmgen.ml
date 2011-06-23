@@ -386,7 +386,7 @@ type rhs_kind =
 let rec expr_size = function
   | Uclosure(fundecls, clos_vars) ->
       RHS_block (fundecls_size fundecls + List.length clos_vars)
-  | Ulet(_, id, exp, _, body) ->
+  | Ulet(_, id, exp, body) ->
       expr_size body
   | Uletrec(bindings, body) ->
       expr_size body
@@ -867,7 +867,7 @@ let rec transl = function
               (List.map transl args) dbg
         | _ ->
             bind "met" (lookup_tag obj (transl met)) (call_met obj args))
-  | Ulet(_, id, exp, _, body) ->
+  | Ulet(_, id, exp, body) ->
       begin match is_unboxed_number exp with
         No_unboxing ->
           Clet(id, transl exp, transl body)

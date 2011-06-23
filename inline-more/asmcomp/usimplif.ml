@@ -31,10 +31,10 @@ let clambda_map f ulam =
       let args = List.map f args in
       Ugeneric_apply (funct, args, debug)
     | Uoffset(u, ofs) -> Uoffset (f u, ofs)
-    | Ulet(str, id, def, approx, body) ->
+    | Ulet(str, id, def, body) ->
       let def = f def in
       let body = f body in
-      Ulet (str, id, def, approx, body)
+      Ulet (str, id, def, body)
     | Uletrec(decls, body) -> Uletrec (List.map (fun (id, u) ->
       (id, f u)) decls, f body)
     | Uprim(p, args, debug) -> Uprim (p, List.map f args, debug)
@@ -66,7 +66,7 @@ let clambda_iter f ulam =
     | Uconst _ -> ()
     | Ugeneric_apply(funct, args, debug) -> f funct; List.iter f args
     | Uoffset(u, ofs) -> f u
-    | Ulet(str, id, def, approx, body) -> f def; f body
+    | Ulet(str, id, def, body) -> f def; f body
     | Uletrec(decls, body) ->
       List.iter (fun (id, u) -> f u) decls;
       f body
@@ -90,10 +90,17 @@ let clambda_iter f ulam =
       List.iter (fun (clos, ubody) -> f ubody) defs; List.iter f env
 
 
-let debug_elim = Clflags.new_flag Clflags.debug_flags "refelim" false
-  "debug reference elimination after closure conversion"
-let optim_elim = Clflags.new_flag Clflags.optim_flags "refelim" true
+
+
+
+let debug_refelim = Clflags.new_flag Clflags.debug_flags "refelim" false
+  "debug reference elimination in clambda-code"
+let dump_refelim = Clflags.new_flag Clflags.debug_flags "dump-refelim" false
+  "dump tree after reference elimination in clambda-code"
+let optim_refelim = Clflags.new_flag Clflags.optim_flags "refelim" true
   "transform references into variables when they do not escape"
+
+let stats_removed_references = ref 0
 
 let eliminate_ref ulam =
 
@@ -102,7 +109,7 @@ let eliminate_ref ulam =
   let rec find_ref_new_env env ulam =
     let rec find_ref ulam =
       match ulam with
-        | Ulet(Strict, v, Uprim(Pmakeblock(0, Mutable), [linit], _), _, lbody) ->
+        | Ulet(Strict, v, Uprim(Pmakeblock(0, Mutable), [linit], _), lbody) ->
           find_ref linit;
           let escapes = ref false in
           let env = Tbl.add v escapes env in
@@ -130,10 +137,10 @@ let eliminate_ref ulam =
   if !to_elim <> Tbl.empty then
     let rec elim_ref ulam =
       match ulam with
-        | Ulet(Strict, v, Uprim(Pmakeblock(0, Mutable), [linit], _), _, lbody) when
+        | Ulet(Strict, v, Uprim(Pmakeblock(0, Mutable), [linit], _), lbody) when
             Tbl.mem v !to_elim ->
 (*          stats_eliminated_refs := v :: !stats_eliminated_refs; *)
-              Ulet(Variable, v, elim_ref linit, Value_unknown, elim_ref lbody)
+              Ulet(Variable, v, elim_ref linit, elim_ref lbody)
 
         | Uprim(Pfield 0, [Uvar v], _) when  Tbl.mem v !to_elim -> Uvar v
         | Uprim(Psetfield(0, _, _), [Uvar v; e], _) when Tbl.mem v !to_elim ->
@@ -147,7 +154,23 @@ let eliminate_ref ulam =
   else
     ulam
 
-let optimize ulam =
-  if !optim_elim then
-    eliminate_ref ulam
-  else ulam
+let print_stats ppf pass (msg, stats) =
+  if !stats <> 0 then
+    Format.fprintf ppf "STATS %s:\t%s:\t%d@." pass msg !stats
+
+let optimize ppf ulam =
+  if !optim_refelim then begin
+    stats_removed_references := 0;
+    let ulam = eliminate_ref ulam in
+    if !debug_refelim then begin
+      List.iter (print_stats ppf "simplif2")
+	[
+	  "removed references",  stats_removed_references;
+	];
+    end;
+    if !Clflags.dump_closure || !dump_refelim then begin
+      Format.fprintf ppf "*** Clambda: after simplification:@;%a@."
+	Printclambda.print_ulambda ulam;
+    end;
+    ulam
+  end else ulam

@@ -30,9 +30,8 @@ type ulambda =
 (*
 Fabrice: Ulet(str, id, ulam, approx, ubody)
   - str: Strict | Mutable (for simplification)
-  - approx : Value approximation (for printing)
 *)
-  | Ulet of let_kind * Ident.t * ulambda * value_approximation * ulambda
+  | Ulet of let_kind * Ident.t * ulambda * ulambda
   | Uletrec of (Ident.t * ulambda) list * ulambda
   | Uprim of primitive * ulambda list * Debuginfo.t
   | Uswitch of ulambda * ulambda_switch

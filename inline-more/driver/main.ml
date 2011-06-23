@@ -144,6 +144,16 @@ module Options = Main_args.Make_bytecomp_options (struct
   let anonymous = anonymous
 end)
 
+let _ =
+  try
+    Clflags.set_flags Clflags.debug_flags (Sys.getenv "OCPDEBUG");
+  with Not_found -> ()
+
+let _ =
+  try
+    Clflags.set_flags Clflags.debug_flags (Sys.getenv "OCPOPTIM");
+  with Not_found -> ()
+
 let fatal err =
   prerr_endline err;
   exit 2

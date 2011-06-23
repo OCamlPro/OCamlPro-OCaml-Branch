@@ -22,5 +22,6 @@ open Clambda
 
 val print_ulambda_if : Format.formatter -> bool -> string -> ulambda -> unit
 val print_ulambda : Format.formatter -> ulambda -> unit
-
+val clear_approximations : unit -> unit
+val add_approximation : Ident.t -> Clambda.value_approximation -> unit
 

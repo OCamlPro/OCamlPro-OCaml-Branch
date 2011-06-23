@@ -16,4 +16,4 @@
 (*                                                                     *)
 (***********************************************************************)
 
-val optimize : Clambda.ulambda -> Clambda.ulambda
+val optimize : Format.formatter -> Clambda.ulambda -> Clambda.ulambda

@@ -211,7 +211,7 @@ let rec const_is_mutable cst =
   match cst with
       Const_base _ -> false
     | Const_pointer _ -> false
-    | Const_immstring _ -> true
+    | Const_immstring _ -> false (* immediate strings are expected to be immutable by the compiler *)
     | Const_block (Immutable, _, args) -> List.exists const_is_mutable args
     | Const_block (Mutable, _, _) -> true
     | Const_float_array _ -> true

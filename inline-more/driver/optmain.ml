@@ -166,6 +166,17 @@ module Options = Main_args.Make_optcomp_options (struct
   let anonymous = anonymous
 end);;
 
+
+let _ =
+  try
+    Clflags.set_flags Clflags.debug_flags (Sys.getenv "OCPDEBUG");
+  with Not_found -> ()
+
+let _ =
+  try
+    Clflags.set_flags Clflags.optim_flags (Sys.getenv "OCPOPTIM");
+  with Not_found -> ()
+
 let main () =
   native_code := true;
   let ppf = Format.err_formatter in

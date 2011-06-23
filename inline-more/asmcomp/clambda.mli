@@ -27,7 +27,7 @@ type ulambda =
   | Ugeneric_apply of ulambda * ulambda list * Debuginfo.t
   | Uclosure of (function_description * ulambda) list * ulambda list
   | Uoffset of ulambda * int
-  | Ulet of let_kind * Ident.t * ulambda * value_approximation * ulambda
+  | Ulet of let_kind * Ident.t * ulambda * ulambda
   | Uletrec of (Ident.t * ulambda) list * ulambda
   | Uprim of primitive * ulambda list * Debuginfo.t
   | Uswitch of ulambda * ulambda_switch

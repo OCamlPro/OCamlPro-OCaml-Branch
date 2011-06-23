@@ -28,12 +28,14 @@ let rec approx ppf v =
   match v with
     | Value_tuple args ->
       let nargs = Array.length args in
-      assert (nargs > 0);
-      fprintf ppf "@[<2>(%a" approx args.(0);
-      for i = 1 to nargs-1 do
-	fprintf ppf ", %a" approx args.(i)
-      done;
-      fprintf ppf ")@]"
+      (*      assert (nargs > 0); *)
+      if nargs > 0 then begin
+	fprintf ppf "@[<2>(%a" approx args.(0);
+	for i = 1 to nargs-1 do
+	  fprintf ppf ", %a" approx args.(i)
+	done;
+	fprintf ppf ")@]"
+      end else fprintf ppf "()"
     | Value_unknown -> fprintf ppf "?"
     | Value_integer n -> fprintf ppf "@[<2>int %d@]" n
     | Value_constptr n -> fprintf ppf "@[<2>cstptr %d@]" n
@@ -42,6 +44,23 @@ let rec approx ppf v =
 	(if f.fun_closed then " closed" else "")
 	(match f.fun_inline with None -> "" | _ -> " inline")
 	approx res
+
+
+let approximations = (Hashtbl.create 17: (Ident.t, Clambda.value_approximation) Hashtbl.t)
+
+let clear_approximations () =
+  Hashtbl.clear approximations
+
+let add_approximation id approx =
+  match approx with
+      Value_unknown -> ()
+    | _ -> Hashtbl.add approximations id approx
+
+let approximation ppf id =
+  try
+    let app = Hashtbl.find approximations id in
+    approx ppf app
+  with Not_found -> ()
 
 let array_iter2 f a b =
   let len_a = Array.length a in
@@ -113,14 +132,14 @@ let rec lam ppf l =
         vars
         lam lhandler
 
-  | Ulet(str, id, arg, app, body) ->
+  | Ulet(str, id, arg, body) ->
       let rec letbody = function
-        | Ulet(str, id, arg, app, body) ->
-            fprintf ppf "@ @[<2>%a {%a} %s @ %a@]" Ident.print id approx app
+        | Ulet(str, id, arg, body) ->
+            fprintf ppf "@ @[<2>%a {%a} %s @ %a@]" Ident.print id approximation id
 	      (string_of_kind str) lam arg;
             letbody body
         | expr -> expr in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a {%a} %s @ %a@]" Ident.print id approx app
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a {%a} %s @ %a@]" Ident.print id approximation id
 	(string_of_kind str) lam arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr

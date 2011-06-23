@@ -55,7 +55,7 @@ let occurs_var var u =
     | Ugeneric_apply(funct, args, _) -> occurs funct || List.exists occurs args
     | Uclosure(fundecls, clos) -> List.exists occurs clos
     | Uoffset(u, ofs) -> occurs u
-    | Ulet(_, id, def, _, body) -> occurs def || occurs body
+    | Ulet(_, id, def, body) -> occurs def || occurs body
     | Uletrec(decls, body) ->
         List.exists (fun (id, u) -> occurs u) decls || occurs body
     | Uprim(p, args, _) -> List.exists occurs args
@@ -136,7 +136,7 @@ let lambda_smaller lam threshold =
         raise Exit (* inlining would duplicate function definitions *)
     | Uoffset(lam, ofs) ->
         incr size; lambda_size lam
-    | Ulet(_, id, lam, _, body) ->
+    | Ulet(_, id, lam, body) ->
         lambda_size lam; lambda_size body
     | Uletrec(bindings, body) ->
         raise Exit (* usually too large *)
@@ -282,9 +282,9 @@ let rec substitute sb ulam =
            let rec body and use only the substituted term. *)
       Uclosure(defs, List.map (substitute sb) env)
   | Uoffset(u, ofs) -> Uoffset(substitute sb u, ofs)
-  | Ulet(str, id, u1, _, u2) ->
+  | Ulet(str, id, u1, u2) ->
       let id' = Ident.rename id in
-      Ulet(str, id', substitute sb u1, Value_unknown, substitute (Tbl.add id (Uvar id') sb) u2)
+      Ulet(str, id', substitute sb u1, substitute (Tbl.add id (Uvar id') sb) u2)
   | Uletrec(bindings, body) ->
       let bindings1 =
         List.map (fun (id, rhs) -> (id, Ident.rename id, rhs)) bindings in
@@ -435,7 +435,7 @@ let rec bind_params_rec subst params args body =
         let p1' = Ident.rename p1 in
         let body' =
           bind_params_rec (Tbl.add p1 (Uvar p1') subst) pl al body in
-        if occurs_var p1 body then Ulet(Strict, p1', a1, Value_unknown, body')
+        if occurs_var p1 body then Ulet(Strict, p1', a1, body')
         else if no_effects a1 then body'
         else Usequence(a1, body')
       end
@@ -621,8 +621,9 @@ let rec close fenv cenv = function
 	  match args with
 	      [] -> body
 	    | (arg_id, arg_lam, arg_approx) :: args ->
+	      Printclambda.add_approximation arg_id arg_approx;
 	      iter args
-		(Ulet (Strict, arg_id, arg_lam, arg_approx, body))
+		(Ulet (Strict, arg_id, arg_lam, body))
 	in
 	let internal_args =
 	  (List.map (fun (arg_id, arg_lam, arg_approx) ->
@@ -653,7 +654,9 @@ let rec close fenv cenv = function
 		  Uvar arg_name -> (arg_name, (fun app -> app))
 		| _ ->
 		  let arg_name = Ident.create "arg" in
-		  (arg_name, fun app -> Ulet( Strict, arg_name, uarg, arg_approx, app))
+		  (arg_name, fun app ->
+		    Printclambda.add_approximation arg_name arg_approx;
+		    Ulet( Strict, arg_name, uarg, app))
 	      in
               let arg_approx =
 		match arg_approx with
@@ -690,13 +693,15 @@ let rec close fenv cenv = function
     begin match (str, alam) with
         (Variable, _) ->
           let (ubody, abody) = close fenv cenv body in
-          (Ulet(Variable, id, ulam, alam, ubody), abody)
+	  Printclambda.add_approximation id alam;
+          (Ulet(Variable, id, ulam, ubody), abody)
       | (_, (Value_integer _ | Value_constptr _))
           when str = Alias || is_pure lam ->
         close (Tbl.add id alam fenv) cenv body
       | (_, _) ->
         let (ubody, abody) = close (Tbl.add id alam fenv) cenv body in
-        (Ulet(str, id, ulam, alam, ubody), abody)
+	Printclambda.add_approximation id alam;
+        (Ulet(str, id, ulam, ubody), abody)
     end
   | Lletrec(defs, body) ->
     if List.for_all
@@ -716,7 +721,8 @@ let rec close fenv cenv = function
             (fun (id, pos, approx) sb ->
               Tbl.add id (Uoffset(Uvar clos_ident, pos)) sb)
             infos Tbl.empty in
-        (Ulet(Strict, clos_ident, clos, approx, substitute sb ubody),
+	Printclambda.add_approximation clos_ident approx;
+        (Ulet(Strict, clos_ident, clos, substitute sb ubody),
          approx)
       end else begin
         (* General case: recursive definition of values *)

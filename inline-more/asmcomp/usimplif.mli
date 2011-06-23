@@ -22,5 +22,5 @@ val clambda_iter :
 val clambda_map :
   (Clambda.ulambda -> Clambda.ulambda) -> Clambda.ulambda -> Clambda.ulambda
 
-val optimize : Clambda.ulambda -> Clambda.ulambda
+val optimize : Format.formatter -> Clambda.ulambda -> Clambda.ulambda
 
