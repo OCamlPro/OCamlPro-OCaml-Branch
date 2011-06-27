@@ -474,7 +474,7 @@ let direct_apply :
   let app_args = List.map fst uargs in
   let app =
     match fundesc.fun_inline with
-	None -> Udirect_apply(fundesc.fun_label, app_args, Debuginfo.none)
+	None -> Udirect_apply(fundesc, app_args, Debuginfo.none)
       | Some(params, body) -> bind_params params app_args body in
   (* If ufunct can contain side-effects or function definitions,
      we must make sure that it is evaluated exactly once.

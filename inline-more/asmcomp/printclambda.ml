@@ -166,10 +166,10 @@ let rec lam ppf l =
        lam larg switch sw
 
 (* from Lapply *)
-  | Udirect_apply (function_label, largs, _) ->
+  | Udirect_apply (clos, largs, _) ->
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
-      fprintf ppf "@[<2>(%s@ %a)@]" function_label lams largs
+      fprintf ppf "@[<2>(%s@ %a)@]" clos.fun_label lams largs
  | Ugeneric_apply(lfun, largs, _) ->
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in

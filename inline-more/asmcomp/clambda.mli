@@ -23,7 +23,7 @@ type function_label = string
 type ulambda =
     Uvar of Ident.t
   | Uconst of structured_constant * string option
-  | Udirect_apply of function_label * ulambda list * Debuginfo.t
+  | Udirect_apply of function_description * ulambda list * Debuginfo.t
   | Ugeneric_apply of ulambda * ulambda list * Debuginfo.t
   | Uclosure of (function_description * ulambda) list * ulambda list
   | Uoffset of ulambda * int

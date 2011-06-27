@@ -838,8 +838,8 @@ let rec transl = function
       Cop(Calloc, transl_fundecls 0 fundecls)
   | Uoffset(arg, offset) ->
       field_address (transl arg) offset
-  | Udirect_apply(lbl, args, dbg) ->
-      Cop(Capply(typ_addr, dbg), Cconst_symbol lbl :: List.map transl args)
+  | Udirect_apply(clos, args, dbg) ->
+      Cop(Capply(typ_addr, dbg), Cconst_symbol clos.fun_label :: List.map transl args)
   | Ugeneric_apply(clos, [arg], dbg) ->
       bind "fun" (transl clos) (fun clos ->
         Cop(Capply(typ_addr, dbg), [get_field clos 0; transl arg; clos]))
