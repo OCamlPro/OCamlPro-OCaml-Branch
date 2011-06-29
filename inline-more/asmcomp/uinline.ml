@@ -20,6 +20,17 @@ open Format
 open Asttypes
 open Lambda
 open Clambda
+open Uapprox
+
+module List2 = struct
+  include List
+
+  let rec last list =
+    match list with
+	[] -> raise (Invalid_argument "List.last")
+      | [ last ] -> last
+      | _ :: tail -> last tail
+end
 
 (* TODO:
 - improve approximation of closures in closure.ml in the case where a function is
@@ -33,159 +44,6 @@ let dump_inline2 = Clflags.new_flag Clflags.debug_flags "dump-inline2" false
 let optim_inline2 = Clflags.new_flag Clflags.optim_flags "inline2" true
   "inlining and constant propagation after closure conversion"
 
-module List2 = struct
-  include List
-
-  let rec last list =
-    match list with
-	[] -> raise (Invalid_argument "List.last")
-      | [ last ] -> last
-      | _ :: tail -> last tail
-end
-
-(* We should add approximations for all constants ? *)
-type value_approximation =
-  | Approx_unknown
-  | Approx_function of function_approximation
-  | Approx_closure of int * value_approximation array
-  | Approx_shared of value_approximation * mutable_flag * structured_constant * string
-  | Approx_block of int * value_approximation list
-  | Approx_constant of constant
-  | Approx_pointer of int
-  | Approx_immstring of string
-  | Approx_exit (* no value is returned *)
-
-and function_approximation = {
-  mutable fun_result : value_approximation;
-  fun_desc : function_description;
-  mutable fun_inlined : bool;
-  mutable fun_body : ulambda;
-}
-
-(* [merge_approx list] merges approximations: if the same approximation is given
-as an output of all branches, the global output is that approximation. It is also
-true if some branches do not return. *)
-let rec merge_approx approx =
-  match approx with
-      [] -> Approx_unknown
-    | head :: tail -> merge_approx_with_list head tail
-
-and merge_approx_with_list approx list =
-  match approx with
-      Approx_unknown -> approx
-    | _ ->
-      match list with
-	  [] -> approx
-	| head :: tail ->
-	  let approx =
-	    if approx = head then approx else
-	      match approx, head with
-		| Approx_exit, _ -> head
-		| _, Approx_exit -> approx
-		| Approx_block (tag1, args1), Approx_block (tag2, args2) ->
-		  if tag1 = tag2 && List.length args1 = List.length args2 then
-		    Approx_block (tag1, List.map2 merge_approx2 args1 args2)
-		  else
-		    Approx_unknown
-		| _ -> Approx_unknown
-	  in
-	  merge_approx_with_list approx tail
-
-
-and merge_approx2 a1 a2 = merge_approx_with_list a1 [a2]
-
-let rec print_approx ppf approx =
-  match approx with
-      Approx_constant cst -> Printlambda.structured_constant ppf (Const_base cst)
-    | Approx_immstring s ->  Printlambda.structured_constant ppf (Const_immstring s)
-    | Approx_block (tag, args) ->
-      fprintf ppf "@[<v 3>block(tag=%d)@;" tag;
-      List.iter (fun arg -> print_approx ppf arg; fprintf ppf "@;") args;
-      fprintf ppf "@]@,"
-    | Approx_shared (approx, mut, cst, label) ->
-      Printlambda.structured_constant ppf cst
-    | Approx_closure _ -> fprintf ppf "<closures>"
-    | Approx_function _ -> fprintf ppf "<function>"
-    | Approx_exit -> fprintf ppf "<exit>"
-    | Approx_unknown -> fprintf ppf "<?>"
-    | Approx_pointer n -> fprintf ppf "constptr %d" n
-
-let rec approx_of_approx approx =
-  match approx with
-      Approx_constant (Const_int n )  -> Value_integer n
-    | Approx_constant ( Const_char c)  -> Value_integer (int_of_char c)
-    | Approx_constant _ -> Value_unknown
-
-    | Approx_pointer n -> Value_constptr n
-    | Approx_block (tag, args) -> Value_tuple (Array.of_list (List.map approx_of_approx args))
-    | Approx_shared (approx, _, _, _ ) -> approx_of_approx approx
-    | Approx_closure _ -> Value_unknown
-    | Approx_function fapp -> Value_closure (fapp.fun_desc, approx_of_approx fapp.fun_result)
-    | Approx_exit -> Value_unknown
-    | Approx_immstring _ -> Value_unknown
-    | Approx_unknown
-      -> Value_unknown
-
-let add_approximation id approx =
-  Printclambda.add_approximation id (approx_of_approx approx)
-
-
-let rec constant_of_approximation approx =
-  match approx with
-    | Approx_constant (Const_int n) -> Const_base (Const_int n)
-    | Approx_shared (_, Mutable, _, _)
-    | Approx_unknown
-    | Approx_closure _
-    | Approx_function _
-      -> raise Not_found
-    | Approx_shared (approx, Immutable, cst, _ ) ->
-      cst
-    | Approx_block (tag, args) ->
-      Const_block (Immutable, tag, List.map constant_of_approximation args)
-    | Approx_pointer n -> Const_pointer n
-    | Approx_constant cst -> Const_base cst
-    | Approx_immstring s -> Const_immstring s
-    | Approx_exit -> raise Not_found
-
-(* Return a value to replace [ulam] from the approximation [approx]. For
-mutable constants, an approximation can only be returned if the toplevel
-value has already a label, to avoid duplicating mutable value. *)
-
-let value_of_approximation approx =
-  match approx with
-      Approx_shared (approx, _, cst, label) ->
-	Uconst (cst, Some label)
-    | _ ->
-      let cst = constant_of_approximation approx in
-      match cst with
-	  Const_base(Const_int _ | Const_char _) | Const_pointer _ ->
-	    Uconst(cst, None)
-	| _ ->
-	  Uconst (cst, Some (Compilenv.new_structured_constant cst true))
-
-let rec approx_approx approx =
-  match approx with
-      Approx_shared (approx, _, _, _) -> approx_approx approx
-    | _ -> approx
-
-let rec approximation_of_constant cst =
-  match cst with
-      Const_base c -> Approx_constant c
-    | Const_pointer ptr -> Approx_pointer ptr
-    | Const_immstring s -> Approx_immstring s
-    | Const_float_array _ -> Approx_unknown
-    | Const_block (Mutable, tag, args) -> Approx_unknown
-    | Const_block (Immutable, tag, args) ->
-      Approx_block (tag, List.map approximation_of_constant args)
-
-let boolean_approximation approx =
-  match approx_approx approx with
-      Approx_pointer 0 -> Some false
-    | Approx_pointer 1 -> Some true
-    | Approx_constant (Const_int 0) -> Some false
-    | Approx_constant (Const_int 1) -> Some true
-    | _ -> None
-
 let stats = ref []
 let new_stats msg =
   let r = ref 0 in
@@ -198,29 +56,44 @@ let stats_removed_after_exit = new_stats "after exit removed"
 let stats_catch_removed = new_stats "catch removed"
 let stats_while_removed = new_stats "while removed"
 let stats_elsebranch_removed = new_stats "else-branch removed"
-
-type catch_approx = {
-  mutable catch_uses : int;
-  mutable catch_args : value_approximation list list;
-}
-
-type env = {
-  env_vars : (Ident.t, value_approximation) Tbl.t;
-  env_catches : (int, catch_approx) Tbl.t;
-  env_labels : (string, function_approximation) Hashtbl.t;
-}
-
-let empty_env () = {
-  env_vars = Tbl.empty;
-  env_catches = Tbl.empty;
-  env_labels = Hashtbl.create 17;
-}
-
+let stats_new_direct_call = new_stats "new direct call"
+let stats_inlined_function = new_stats "inlined function"
 
 let inline_primitive p args debug =
   let uargs = List.map fst args in
   let ulam = Uprim (p, uargs, debug) in
   (ulam, Approx_unknown)
+
+let label_approx = Hashtbl.create 17
+let label_uses = Hashtbl.create 17
+let var_uses = Hashtbl.create 17
+
+let count_uses ulam =
+  Hashtbl.clear label_uses;
+  Hashtbl.clear var_uses;
+  let rec counter ulam =
+    begin
+      match ulam with
+	  Uvar id ->
+	    begin try incr (Hashtbl.find var_uses id) with Not_found ->
+	      let r = ref 1 in Hashtbl.add var_uses id r; end
+	| Udirect_apply (fundesc, _, _) ->
+	  let label = fundesc.fun_label in
+	    begin try incr (Hashtbl.find label_uses label) with Not_found ->
+	      let r = ref 1 in Hashtbl.add label_uses label r; end
+	| _ -> ()
+    end;
+    Usimplif.clambda_iter counter ulam;
+    (* We want to detect the case where a function is only used once, in
+       which case it is natural to inline it whatever its size is.
+    begin
+      match ulam with
+	| Ulet(Strict, var, Uclosure ([fundesc], _), body) ->
+	  let var_uses =
+    end
+    *)
+  in
+  counter ulam
 
 
 (* [inline env ulam]: [env] is an association between identifiers and
@@ -362,7 +235,7 @@ let rec inline env ulam =
 		  let ifnot, ifnot_approx = inline env ifnot in
 
 		  let ulam = Uifthenelse (cond, ifso, ifnot) in
-		  (ulam, merge_approx2 ifso_approx ifnot_approx)
+		  (ulam, merge_approx [ifso_approx; ifnot_approx])
 	      | Some true ->
 		incr stats_elsebranch_removed;
 		let ifso, ifso_approx = inline env ifso in
@@ -471,7 +344,7 @@ let rec inline env ulam =
 	    [] -> assert false (* equiv to catch_uses = 0 ! *)
 	  | approx :: next_approx ->
 	    let approx = List.fold_left (fun approx next_approx ->
-	      List.map2 merge_approx2 approx next_approx
+	      List.map2 (fun x y -> merge_approx [x;y]) approx next_approx
 	    ) approx next_approx in
 	    let vars = List.fold_left2 (fun tbl id approx ->
 	      Tbl.add id approx tbl
@@ -479,7 +352,7 @@ let rec inline env ulam =
 	    let hdlr_env = { env with env_vars = vars } in
 	    let (hdlr, hdlr_approx) = inline hdlr_env hdlr in
 	    let ulam = Ucatch (num, ids,  body, hdlr) in
-	    let final_approx = merge_approx2 body_approx hdlr_approx in
+	    let final_approx = merge_approx [body_approx; hdlr_approx] in
 	    (*	    if final_approx <> Approx_unknown then begin
 		    fprintf err_formatter "Merge:@.";
 		    fprintf err_formatter "Body:\t%a@." print_approx body_approx;
@@ -542,7 +415,7 @@ let rec inline env ulam =
       let body, body_approx = inline env body in
       let hdlr, hdlr_approx = inline env hdlr in
       let ulam = Utrywith (body, exn, hdlr) in
-      (ulam, merge_approx2 body_approx hdlr_approx)
+      (ulam, merge_approx [body_approx; hdlr_approx])
 
     (* TODO: should we try to do some analysis for objects and classes
        ? *)
@@ -580,30 +453,50 @@ let rec inline env ulam =
       inline_primitive p args debug
 
     | Udirect_apply (clos, args, debug) ->
+      let args = List.map (inline env) args in
       begin
 	try
-	  let _clos_app = Hashtbl.find env.env_labels clos.fun_label in
-	  Format.eprintf "Label %s found\n%!" clos.fun_label;
+	  let clos_app = Hashtbl.find label_approx clos.fun_label in
+	  (*	  Format.eprintf "Label %s found\n%!" clos.fun_label; *)
+	  decr stats_new_direct_call;
+	  direct_apply env clos_app args debug
 	with Not_found ->
-	  Format.eprintf "Label %s not found\n%!" clos.fun_label;
+	  (*	  Format.eprintf "Label %s not found\n%!" clos.fun_label; *)
+	  let ulam = Udirect_apply (clos, List.map fst args, debug) in
+	  (ulam, Approx_unknown)
       end;
-      let ulam = Udirect_apply (clos, List.map (inline_no_approx env) args, debug) in
-      (ulam, Approx_unknown)
 
+    (* TODO: we must count use sites for functions, so that we can decide
+       if we keep a closure or not. Question: should it be combined with the
+       current analysis, or done later in a pass of dead code elimination
+       (for example in usimplif.ml) *)
     | Ugeneric_apply(funct, args, debug) ->
       let (ufunct, funct_approx) = inline env funct in
-      begin
-	match funct_approx with
-	    Approx_exit -> assert false
-	  | Approx_closure _ -> Printf.eprintf "call: approx_closure\n%!"
-	  | Approx_function _ -> Printf.eprintf "call: approx_function\n%!"
-	  | Approx_unknown -> Printf.eprintf "call: no approx\n%!"
-	  | _ -> assert false
-      end;
       let args = List.map (inline env) args in
-      let uargs = List.map fst args in
-      let ulam = Ugeneric_apply (ufunct, uargs, debug) in
-      ulam, Approx_unknown
+      begin try
+	      match funct_approx with
+		| Approx_closure (pos, clos) -> begin
+		  match clos.(pos) with
+		      Approx_function clos_app ->
+			Format.eprintf "Approx_closure %s (closed %b)@." clos_app.fun_desc.fun_label clos_app.fun_desc.fun_closed;
+
+			let fundesc = clos_app.fun_desc in
+			let nargs = List.length args in
+			if fundesc.fun_arity <> nargs then raise Not_found;
+			if clos_app.fun_desc.fun_closed then
+			  let ulam, ulam_approx = direct_apply env clos_app args debug in
+			  Usequence(ufunct, ulam), ulam_approx
+			else
+			  let args = args @ [ ufunct, funct_approx ] in
+			  direct_apply env clos_app args debug
+		    | _ -> assert false
+		end
+		| _ -> raise Not_found
+	with Not_found ->
+	  let uargs = List.map fst args in
+	  let ulam = Ugeneric_apply (ufunct, uargs, debug) in
+	  ulam, Approx_unknown
+      end;
 
     | Uclosure (defs, fv) ->
       let fv = List.map (inline env) fv in
@@ -615,7 +508,24 @@ let rec inline env ulam =
       ) defs in
       let fv_pos = !pos in
       let closure = Array.create (!pos + List.length fv) Approx_unknown in
-      List.iteri (fun i (fv, fv_approx) -> closure.(fv_pos + i) <- fv_approx) fv;
+      List.iteri (fun i (fv, fv_approx) ->
+	begin
+	  match fv with
+	      Uvar _
+(* a reference to another closure in a set of mutually recursive functions *)
+	    | Uoffset (Uvar _, _)
+(* Why would a constant appear in a closure, if it is correctly propagated ? *)
+	    | Uconst _
+(* An element of a closure, saved in another closure. Maybe the closures could be
+   shared ? *)
+	    | Uprim(Pfield _, [Uvar _], _) -> ()
+	    | _ ->
+	      Format.fprintf err_formatter "Bad closure environment@.<<<";
+	      Printclambda.print_ulambda err_formatter fv;
+	      Format.fprintf err_formatter ">>>@.";
+	      assert false
+	end;
+	closure.(fv_pos + i) <- fv_approx) fv;
       let defs = List.map (fun (clos, clos_pos, body) ->
 	let clos_app = {
 	  fun_result = Approx_unknown;
@@ -623,15 +533,16 @@ let rec inline env ulam =
 	  fun_inlined = (match clos.fun_inline with None -> false | _ -> true);
 	  fun_body = body;
 	} in
-	Hashtbl.add env.env_labels clos.fun_label clos_app;
+	Hashtbl.add label_approx clos.fun_label clos_app;
 	closure.(clos_pos) <- Approx_function clos_app;
 	(clos, clos_pos, body, clos_app)
       ) defs in
       let defs = List.map (fun (clos, clos_pos, body, clos_app) ->
+	let env = { env with env_vars = Tbl.empty } in
 	let env = if not clos.fun_closed then
 	    let clos_id = List2.last clos.fun_params in
-(*	    Format.eprintf "In %s:\n%!" clos.fun_label;
-	    Format.eprintf "Adding closure approximation for %a\n%!" Ident.print clos_id; *)
+	    (*	    Format.eprintf "In %s:\n%!" clos.fun_label;
+		    Format.eprintf "Adding closure approximation for %a\n%!" Ident.print clos_id; *)
 	    { env with env_vars = Tbl.add clos_id
 		(Approx_closure (clos_pos, closure)) env.env_vars }
 	  else env in
@@ -643,6 +554,23 @@ let rec inline env ulam =
       let (fv,_) = List.split fv in
       let ulam = Uclosure (defs, fv) in
       (ulam, Approx_closure (0,closure) )
+
+and direct_apply env clos_app args debug =
+  incr stats_new_direct_call;
+  let fundesc = clos_app.fun_desc in
+  let args = List.map fst args in
+  match fundesc.fun_inline with
+      None ->
+	let ulam = Udirect_apply (fundesc, args, debug) in
+	(ulam, clos_app.fun_result)
+    | Some (_params, body) -> (* we don't need to use params here ? *)
+      incr stats_inlined_function;
+      Format.eprintf "params: %d args: %d@." (List.length fundesc.fun_params) (List.length args);
+      let ulam = Closure.bind_params fundesc.fun_params args body in
+      (* beware: fortunately, recursive functions cannot be inlined
+	 (fun_inline = None), so, for now, there is no risk of an infinite
+	 loop. *)
+      inline env ulam
 
 and inline_no_approx env ulam =
   let (ulam, approx) = inline env ulam in ulam
@@ -659,6 +587,9 @@ let optimize ppf ulam =
       List.iter (fun (_, r) -> r := 0) !stats;
     end;
 
+    Hashtbl.clear label_approx;
+    count_uses ulam;
+
     let (ulam,_) = inline (empty_env()) ulam in
 
     if !debug_inline2 then
@@ -673,5 +604,5 @@ let optimize ppf ulam =
   end else begin
     if !debug_inline2 then
       Format.fprintf ppf "No second pass of inlining...@.";
-      ulam
-    end
+    ulam
+  end

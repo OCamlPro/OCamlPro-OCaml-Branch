@@ -24,3 +24,9 @@ val clambda_map :
 
 val optimize : Format.formatter -> Clambda.ulambda -> Clambda.ulambda
 
+(*
+val count_uses :
+  Clambda.ulambda ->
+  (Clambda.function_label, int ref) Hashtbl.t * (Ident.t, int ref) Hashtbl.t
+*)
+

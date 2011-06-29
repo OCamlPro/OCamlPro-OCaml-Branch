@@ -505,7 +505,7 @@ asmcomp/linearize.cmi: asmcomp/reg.cmi asmcomp/mach.cmi asmcomp/debuginfo.cmi
 asmcomp/liveness.cmi: asmcomp/mach.cmi
 asmcomp/mach.cmi: asmcomp/reg.cmi asmcomp/debuginfo.cmi asmcomp/cmm.cmi \
     asmcomp/arch.cmo
-asmcomp/printclambda.cmi: asmcomp/clambda.cmi
+asmcomp/printclambda.cmi: typing/ident.cmi asmcomp/clambda.cmi
 asmcomp/printcmm.cmi: asmcomp/cmm.cmi
 asmcomp/printlinear.cmi: asmcomp/linearize.cmi
 asmcomp/printmach.cmi: asmcomp/reg.cmi asmcomp/mach.cmi
@@ -520,6 +520,8 @@ asmcomp/selectgen.cmi: utils/tbl.cmi asmcomp/reg.cmi asmcomp/mach.cmi \
 asmcomp/selection.cmi: asmcomp/mach.cmi asmcomp/cmm.cmi
 asmcomp/spill.cmi: asmcomp/mach.cmi
 asmcomp/split.cmi: asmcomp/mach.cmi
+asmcomp/uapprox.cmi: utils/tbl.cmi bytecomp/lambda.cmi typing/ident.cmi \
+    asmcomp/clambda.cmi parsing/asttypes.cmi
 asmcomp/uinline.cmi: asmcomp/clambda.cmi
 asmcomp/usimplif.cmi: asmcomp/clambda.cmi
 asmcomp/arch.cmo:
@@ -578,12 +580,14 @@ asmcomp/clambda.cmo: bytecomp/lambda.cmi typing/ident.cmi \
     asmcomp/debuginfo.cmi parsing/asttypes.cmi asmcomp/clambda.cmi
 asmcomp/clambda.cmx: bytecomp/lambda.cmx typing/ident.cmx \
     asmcomp/debuginfo.cmx parsing/asttypes.cmi asmcomp/clambda.cmi
-asmcomp/closure.cmo: utils/tbl.cmi bytecomp/switch.cmi typing/primitive.cmi \
-    utils/misc.cmi bytecomp/lambda.cmi typing/ident.cmi asmcomp/debuginfo.cmi \
+asmcomp/closure.cmo: utils/tbl.cmi bytecomp/switch.cmi \
+    asmcomp/printclambda.cmi typing/primitive.cmi utils/misc.cmi \
+    bytecomp/lambda.cmi typing/ident.cmi asmcomp/debuginfo.cmi \
     asmcomp/compilenv.cmi utils/clflags.cmi asmcomp/clambda.cmi \
     parsing/asttypes.cmi asmcomp/closure.cmi
-asmcomp/closure.cmx: utils/tbl.cmx bytecomp/switch.cmx typing/primitive.cmx \
-    utils/misc.cmx bytecomp/lambda.cmx typing/ident.cmx asmcomp/debuginfo.cmx \
+asmcomp/closure.cmx: utils/tbl.cmx bytecomp/switch.cmx \
+    asmcomp/printclambda.cmx typing/primitive.cmx utils/misc.cmx \
+    bytecomp/lambda.cmx typing/ident.cmx asmcomp/debuginfo.cmx \
     asmcomp/compilenv.cmx utils/clflags.cmx asmcomp/clambda.cmx \
     parsing/asttypes.cmi asmcomp/closure.cmi
 asmcomp/cmm.cmo: typing/ident.cmi asmcomp/debuginfo.cmi asmcomp/arch.cmo \
@@ -620,10 +624,10 @@ asmcomp/comballoc.cmx: asmcomp/reg.cmx asmcomp/mach.cmx utils/config.cmx \
     asmcomp/comballoc.cmi
 asmcomp/compilenv.cmo: utils/misc.cmi bytecomp/lambda.cmi typing/ident.cmi \
     typing/env.cmi utils/config.cmi asmcomp/cmx_format.cmi \
-    asmcomp/clambda.cmi asmcomp/compilenv.cmi
+    asmcomp/clambda.cmi parsing/asttypes.cmi asmcomp/compilenv.cmi
 asmcomp/compilenv.cmx: utils/misc.cmx bytecomp/lambda.cmx typing/ident.cmx \
     typing/env.cmx utils/config.cmx asmcomp/cmx_format.cmi \
-    asmcomp/clambda.cmx asmcomp/compilenv.cmi
+    asmcomp/clambda.cmx parsing/asttypes.cmi asmcomp/compilenv.cmi
 asmcomp/debuginfo.cmo: parsing/location.cmi bytecomp/lambda.cmi \
     asmcomp/debuginfo.cmi
 asmcomp/debuginfo.cmx: parsing/location.cmx bytecomp/lambda.cmx \
@@ -724,11 +728,19 @@ asmcomp/split.cmo: asmcomp/reg.cmi utils/misc.cmi asmcomp/mach.cmi \
     asmcomp/split.cmi
 asmcomp/split.cmx: asmcomp/reg.cmx utils/misc.cmx asmcomp/mach.cmx \
     asmcomp/split.cmi
-asmcomp/uinline.cmo: utils/tbl.cmi asmcomp/printclambda.cmi \
-    bytecomp/lambda.cmi typing/ident.cmi utils/clflags.cmi \
+asmcomp/uapprox.cmo: utils/tbl.cmi bytecomp/printlambda.cmi \
+    asmcomp/printclambda.cmi bytecomp/lambda.cmi typing/ident.cmi \
+    asmcomp/compilenv.cmi asmcomp/clambda.cmi parsing/asttypes.cmi \
+    asmcomp/uapprox.cmi
+asmcomp/uapprox.cmx: utils/tbl.cmx bytecomp/printlambda.cmx \
+    asmcomp/printclambda.cmx bytecomp/lambda.cmx typing/ident.cmx \
+    asmcomp/compilenv.cmx asmcomp/clambda.cmx parsing/asttypes.cmi \
+    asmcomp/uapprox.cmi
+asmcomp/uinline.cmo: asmcomp/uapprox.cmi utils/tbl.cmi \
+    asmcomp/printclambda.cmi bytecomp/lambda.cmi utils/clflags.cmi \
     asmcomp/clambda.cmi parsing/asttypes.cmi asmcomp/uinline.cmi
-asmcomp/uinline.cmx: utils/tbl.cmx asmcomp/printclambda.cmx \
-    bytecomp/lambda.cmx typing/ident.cmx utils/clflags.cmx \
+asmcomp/uinline.cmx: asmcomp/uapprox.cmx utils/tbl.cmx \
+    asmcomp/printclambda.cmx bytecomp/lambda.cmx utils/clflags.cmx \
     asmcomp/clambda.cmx parsing/asttypes.cmi asmcomp/uinline.cmi
 asmcomp/usimplif.cmo: utils/tbl.cmi asmcomp/printclambda.cmi \
     bytecomp/lambda.cmi utils/clflags.cmi asmcomp/clambda.cmi \

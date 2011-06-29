@@ -3,29 +3,20 @@
    although iter2 could have been better optimized.
 *)
 
+
+let rec map f list =
+  match list with
+      [] -> []
+    | x :: tail ->
+      let x = f x in
+      x :: map f tail
+
+
+
+let list =
+  map (fun x -> x+1) [1;2;3;4;5]
+
 (*
-
-let rec iter1 f l =
-  match l with
-      [] -> ()
-    | a::l -> f a; iter1 f l
-
-let iter2 f l =
-  let l = ref l in
-    while
-      match !l with
-	  [] -> false
-	| a :: lr ->
-	    f a;
-	    l := lr;
-	    true
-    do
-      ()
-    done
-*)
-
-
-
 let map1 =
   let z = List.map (fun x -> x + 1) [1;2;3] in
   let rec map1 f l =
@@ -36,633 +27,873 @@ let map1 =
 	    x :: (map1 f l)
   in
     map1
-
-let list1 =
-  map1 (fun x -> x+1) [1;2;3;4;5]
-
-
-(*
-
-  camlCode__iter1_58:
-  subq    $24, %rsp
-  .L101:
-  movq    %rax, %rsi
-  cmpq    $1, %rbx
-  je      .L100
-  movq    %rbx, 0(%rsp)
-  movq    %rsi, 8(%rsp)
-  movq    (%rbx), %rax
-  movq    (%rsi), %rdi
-  movq    %rsi, %rbx
-  call    *%rdi
-  movq    0(%rsp), %rax
-  movq    8(%rax), %rbx
-  movq    8(%rsp), %rax
-  jmp     .L101
-  .align  4
-  .L100:
-  movq    $1, %rax
-  addq    $24, %rsp
-  ret
-
-
-  camlCode__iter2_63:
-  subq    $24, %rsp
-  movq    %rax, 0(%rsp)
-  .L104:
-  movq    %rbx, 8(%rsp)
-  cmpq    $1, %rbx
-  je      .L106
-  movq    (%rbx), %rax
-  movq    0(%rsp), %rbx
-  movq    (%rbx), %rdi
-  call    *%rdi
-  movq    8(%rsp), %rax
-  movq    8(%rax), %rbx
-  movq    $3, %rax
-  jmp     .L105
-  .align  4
-  .L106:
-  movq    $1, %rax
-  .L105:
-  cmpq    $1, %rax
-  jne     .L104
-  movq    $1, %rax
-  addq    $24, %rsp
-  ret
-
-
-  camlCode__iter1_58:
-  subq    $24, %rsp
-  .L101:
-  movq    %rax, %rsi
-  cmpq    $1, %rbx
-  je      .L100
-  movq    %rbx, 0(%rsp)
-  movq    %rsi, 8(%rsp)
-  movq    (%rbx), %rax
-  movq    (%rsi), %rdi
-  movq    %rsi, %rbx
-  call    *%rdi
-  movq    0(%rsp), %rax
-  movq    8(%rax), %rbx
-  movq    8(%rsp), %rax
-  jmp     .L101
-  .align  4
-  .L100:
-  movq    $1, %rax
-  addq    $24, %rsp
-  ret
-
-
-  camlCode__iter2_63: (improved)
-  subq    $24, %rsp
-  movq    %rax, 0(%rsp)
-  .L104:
-  movq    %rbx, 8(%rsp)
-  cmpq    $1, %rbx
-  je      .L106
-  movq    (%rbx), %rax
-  movq    0(%rsp), %rbx
-  movq    (%rbx), %rdi
-  call    *%rdi
-  movq    8(%rsp), %rax
-  movq    8(%rax), %rbx
-  jmp     .L104
-  .align  4
-  .L106:
-  movq    $1, %rax
-  addq    $24, %rsp
-  ret
-
 *)
 (*
 -drawlambda
 (seq
+  (letrec
+    (map/1030
+       = (function f/1031 list/1032
+           (if list/1032
+             (let
+               (tail/1034 (=) (field 1 list/1032)
+                x/1033 (=) (field 0 list/1032)
+                x/1035 = (apply f/1031 x/1033))
+               (makeblock 0 x/1035 (apply map/1030 f/1031 tail/1034)))
+             0a)))
+    (setfield_imm 0 (global Code!) map/1030))
   (let
-    (map1/1030
-       (let
-         (z/1031
-            (apply (field 11 (global List!)) (function x/1032 (+ x/1032 1))
-              [0: 1 [0: 2 [0: 3 0a]]]))
-         (letrec
-           (map1/1033
-              (function f/1034 l/1035
-                (if l/1035
-                  (let
-                    (l/1037 (field 1 l/1035)
-                     a/1036 (field 0 l/1035)
-                     x/1038 (apply f/1034 a/1036))
-                    (makeblock 0 x/1038 (apply map1/1033 f/1034 l/1037)))
-                  z/1031)))
-           map1/1033)))
-    (setfield_imm 0 (global Code!) map1/1030))
-  (let
-    (list1/1039
-       (apply (field 0 (global Code!)) (function x/1040 (+ x/1040 1))
-         [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]]))
-    (setfield_imm 1 (global Code!) list1/1039))
+    (list/1036
+       = (apply (field 0 (global Code!)) (function x/1037 (+ x/1037 1))
+           [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]]))
+    (setfield_imm 1 (global Code!) list/1036))
   0a)
+size of camlCode__fun_1044
+lambda size = 3
+camlCode__fun_1044 should be inlined
+Second pass of inlining...
+Label camlCode__map_1030 found
+Label camlCode__map_1030 found
 -dlambda
 (seq
+  (letrec
+    (map/1030
+       = (function f/1031 list/1032
+           (if list/1032
+             (let (x/1035 = (apply f/1031 (field 0 list/1032)))
+               (makeblock 0 x/1035
+                 (apply map/1030 f/1031 (field 1 list/1032))))
+             0a)))
+    (setfield_imm 0 (global Code!) map/1030))
   (let
-    (map1/1030
-       (let
-         (z/1031
-            (apply (field 11 (global List!)) (function x/1032 (+ x/1032 1))
-              [0: 1 [0: 2 [0: 3 0a]]]))
-         (letrec
-           (map1/1033
-              (function f/1034 l/1035
-                (if l/1035
-                  (let (x/1038 (apply f/1034 (field 0 l/1035)))
-                    (makeblock 0 x/1038
-                      (apply map1/1033 f/1034 (field 1 l/1035))))
-                  z/1031)))
-           map1/1033)))
-    (setfield_imm 0 (global Code!) map1/1030))
-  (let
-    (list1/1039
-       (apply (field 0 (global Code!)) (function x/1040 (+ x/1040 1))
-         [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]]))
-    (setfield_imm 1 (global Code!) list1/1039))
+    (list/1036
+       = (apply (field 0 (global Code!)) (function x/1037 (+ x/1037 1))
+           [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]]))
+    (setfield_imm 1 (global Code!) list/1036))
   0a)
-checking tailcall on map1/1033
-stats_rec_removed : 0
-
-stats_tailcall_removed : 0
-
-*** After TonLambda.optimize:
-(seq
-  (let
-    (map1/1030
-       (let
-         (z/1031
-            (apply (field 11 (global List!)) (function x/1032 (+ x/1032 1))
-              [0: 1 [0: 2 [0: 3 0a]]]))
-         (letrec
-           (map1/1033
-              (function f/1034 l/1035
-                (if l/1035
-                  (let (x/1038 (apply f/1034 (field 0 l/1035)))
-                    (makeblock 0 x/1038
-                      (apply map1/1033 f/1034 (field 1 l/1035))))
-                  z/1031)))
-           map1/1033)))
-    (setfield_imm 0 (global Code!) map1/1030))
-  (let
-    (list1/1039
-       (apply (field 0 (global Code!)) (function x/1040 (+ x/1040 1))
-         [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]]))
-    (setfield_imm 1 (global Code!) list1/1039))
-  0a)
-checking tailcall on map1/1033
+size of camlCode__fun_1044
+lambda size = 3
+camlCode__fun_1044 should be inlined
+Second pass of inlining...
+Label camlCode__map_1030 found
+Label camlCode__map_1030 found
 -dclosure
-*** After Closure.intro:
+size of camlCode__fun_1044
+lambda size = 3
+camlCode__fun_1044 should be inlined
+*** Clambda: after closure conversion:
 (seq
   (let
-    (map1/1030
-       (let
-         (z/1031
-            (let
-              (f/1045
-                 (closure (camlCode__fun_1043(1)  x/1032 (+ x/1032 1)) {2} )
-               clos_env/1047
-                 (closure (camlCode__map_1046(2)  f/1063 param/1316
-                            (if param/1316
-                              (let
-                                (l/1048[Alias] (field 1 param/1316)
-                                 a/1049[Alias] (field 0 param/1316)
-                                 r/1050 (apply f/1063 a/1049))
-                                (makeblock 0 r/1050
-                                  (camlCode__map_1046  f/1063 l/1048)))
-                              0a)) {0} ))
-              (camlCode__map_1046  f/1045 [0: 1 [0: 2 [0: 3 0a]]]))
-          clos/1054
-            (closure (camlCode__map1_1033(2)  f/1034 l/1035 env/1052
-                       (if l/1035
-                         (let (x/1038 (apply f/1034 (field 0 l/1035)))
-                           (makeblock 0 x/1038
-                             (camlCode__map1_1033  f/1034 (field 1 l/1035)
-                               env/1052)))
-                         (field 3 env/1052))) {3} 
-                                              z/1031))
-         clos/1054))
-    (setfield_imm 0 (global camlCode!) map1/1030))
+    (clos/1043 {} = 
+       (closure (camlCode__map_1030(2)  f/1031 list/1032 env/1042
+                  (if list/1032
+                    (let (x/1035 {} =  (apply f/1031 (field 0 list/1032)))
+                      (makeblock 0 x/1035
+                        (camlCode__map_1030  f/1031 (field 1 list/1032)
+                          (offset[0] env/1042))))
+                    0a)) {0} ))
+    (setfield_imm 0 (global camlCode!) (offset[0] clos/1043)))
   (let
-    (list1/1039
-       (let
-         (env/1057 (field 0 (global camlCode!))
-          f/1058 (closure (camlCode__fun_1055(1)  x/1040 (+ x/1040 1)) {2} )
-          clos_env/1060
-            (closure (camlCode__map1_1059(2)  f/1034 l/1035 env/1052
-                       (if l/1035
-                         (let (x/1061 (apply f/1034 (field 0 l/1035)))
-                           (makeblock 0 x/1061
-                             (camlCode__map1_1059  f/1034 (field 1 l/1035)
-                               env/1052)))
-                         (field 3 env/1052))) {0} ))
-         (camlCode__map1_1059  f/1058 [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]]
-           env/1057)))
-    (setfield_imm 1 (global camlCode!) list1/1039))
+    (list/1036 {} = 
+       (camlCode__map_1030 
+         (closure (camlCode__fun_1044(1)  x/1037 (+ x/1037 1)) {0} )
+         [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]] (field 0 (global camlCode!))))
+    (setfield_imm 1 (global camlCode!) list/1036))
   0a)
-*** After TonClosure.optimize:
-(let (f/1045 (closure (camlCode__fun_1043(1)  x/1032 (+ x/1032 1)) {2} ))
-  (seq
-    (closure (camlCode__map_1046(2)  f/1063 param/1316
-               (if param/1316
-                 (let
-                   (l/1048[Alias] (field 1 param/1316)
-                    a/1049[Alias] (field 0 param/1316)
-                    r/1050 (apply f/1063 a/1049))
-                   (makeblock 0 r/1050 (camlCode__map_1046  f/1063 l/1048)))
-                 0a)) {0} )
-    (let
-      (z/1031 (camlCode__map_1046  f/1045 [0: 1 [0: 2 [0: 3 0a]]])
-       clos/1054
-         (closure (camlCode__map1_1033(2)  f/1034 l/1035 env/1052
-                    (if l/1035
-                      (let (x/1038 (apply f/1034 (field 0 l/1035)))
-                        (makeblock 0 x/1038
-                          (camlCode__map1_1033  f/1034 (field 1 l/1035)
-                            env/1052)))
-                      (field 3 env/1052))) {3} 
-                                           z/1031))
-      (seq (setfield_imm 0 (global camlCode!) clos/1054)
-        (let
-          (env/1057 (field 0 (global camlCode!))
-           f/1058 (closure (camlCode__fun_1055(1)  x/1040 (+ x/1040 1)) {2} ))
-          (seq
-            (closure (camlCode__map1_1059(2)  f/1034 l/1035 env/1052
-                       (if l/1035
-                         (let (x/1061 (apply f/1034 (field 0 l/1035)))
-                           (makeblock 0 x/1061
-                             (camlCode__map1_1059  f/1034 (field 1 l/1035)
-                               env/1052)))
-                         (field 3 env/1052))) {0} )
-            (let
-              (list1/1039
-                 (camlCode__map1_1059  f/1058
-                   [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]] env/1057))
-              (seq (setfield_imm 1 (global camlCode!) list1/1039) 0a))))))))
+Second pass of inlining...
+Label camlCode__map_1030 found
+Label camlCode__map_1030 found
+*** Clambda: after second inlining:
+(seq
+  (let
+    (clos/1043 {} = 
+       (closure (camlCode__map_1030(2)  f/1031 list/1032 env/1042
+                  (if list/1032
+                    (let (x/1035 {} =  (apply f/1031 (field 0 list/1032)))
+                      (makeblock 0 x/1035
+                        (camlCode__map_1030  f/1031 (field 1 list/1032)
+                          (offset[0] env/1042))))
+                    0a)) {0} ))
+    (setfield_imm 0 (global camlCode!) (offset[0] clos/1043)))
+  (let
+    (list/1036 {} = 
+       (camlCode__map_1030 
+         (closure (camlCode__fun_1044(1)  x/1037 (+ x/1037 1)) {0} )
+         [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]] (field 0 (global camlCode!))))
+    (setfield_imm 1 (global camlCode!) list/1036))
+  0a)
+
+*** Clambda: after simplification:
+(seq
+  (let
+    (clos/1043 {} = 
+       (closure (camlCode__map_1030(2)  f/1031 list/1032 env/1042
+                  (if list/1032
+                    (let (x/1035 {} =  (apply f/1031 (field 0 list/1032)))
+                      (makeblock 0 x/1035
+                        (camlCode__map_1030  f/1031 (field 1 list/1032)
+                          (offset[0] env/1042))))
+                    0a)) {0} ))
+    (setfield_imm 0 (global camlCode!) (offset[0] clos/1043)))
+  (let
+    (list/1036 {} = 
+       (camlCode__map_1030 
+         (closure (camlCode__fun_1044(1)  x/1037 (+ x/1037 1)) {0} )
+         [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]] (field 0 (global camlCode!))))
+    (setfield_imm 1 (global camlCode!) list/1036))
+  0a)
+
 
 -dcmm
-(data int 2048 global "camlCode" "camlCode": skip 8)
+size of camlCode__fun_1044
+lambda size = 3
+camlCode__fun_1044 should be inlined
+Second pass of inlining...
+Label camlCode__map_1030 found
+Label camlCode__map_1030 found
+(data int 2048 global "camlCode" "camlCode": skip 16)
+(data int 2295 "camlCode__2": addr "camlCode__fun_1044" int 3)
 (data
  int 3319
  "camlCode__3":
  addr "caml_curry2"
  int 5
- addr "camlCode__map1_1059")
-(data int 2295 "camlCode__4": addr "camlCode__fun_1055" int 3)
-(data
- int 3319
- "camlCode__5":
- addr "caml_curry2"
- int 5
- addr "camlCode__map_1046")
-(data int 2295 "camlCode__6": addr "camlCode__fun_1043" int 3)
+ addr "camlCode__map_1030")
 (data
  global "camlCode__1"
  int 2048
  "camlCode__1":
  int 3
- addr L11
+ addr L4
  int 2048
- L11:
+ L4:
  int 5
- addr L12
+ addr L5
  int 2048
- L12:
+ L5:
  int 7
- int 1)
-(data
- global "camlCode__2"
+ addr L6
  int 2048
- "camlCode__2":
- int 3
+ L6:
+ int 9
  addr L7
  int 2048
  L7:
- int 5
- addr L8
- int 2048
- L8:
- int 7
- addr L9
- int 2048
- L9:
- int 9
- addr L10
- int 2048
- L10:
  int 11
  int 1)
-(function camlCode__fun_1043 (x/1032: addr) (+ x/1032 2))
-
-(function camlCode__map_1046 (f/1063: addr param/1316: addr)
- (if (!= param/1316 1)
-   (let
-     (l/1048 (load (+a param/1316 4)) a/1049 (load param/1316)
-      r/1050 (app{list.ml:57,20-23} (load f/1063) a/1049 f/1063 addr))
-     (alloc 2048 r/1050
-       (app{list.ml:57,32-39} "camlCode__map_1046" f/1063 l/1048 addr)))
+(function camlCode__map_1030 (f/1031: addr list/1032: addr env/1042: addr)
+ (if (!= list/1032 1)
+   (let x/1035 (app (load f/1031) (load list/1032) f/1031 addr)
+     (alloc 2048 x/1035
+       (app "camlCode__map_1030" f/1031 (load (+a list/1032 8)) env/1042
+         addr)))
    1a))
 
-(function camlCode__map1_1033 (f/1034: addr l/1035: addr env/1052: addr)
- (if (!= l/1035 1)
-   (let x/1038 (app (load f/1034) (load l/1035) f/1034 addr)
-     (alloc 2048 x/1038
-       (app "camlCode__map1_1033" f/1034 (load (+a l/1035 4)) env/1052 addr)))
-   (load (+a env/1052 12))))
-
-(function camlCode__fun_1055 (x/1040: addr) (+ x/1040 2))
-
-(function camlCode__map1_1059 (f/1034: addr l/1035: addr env/1052: addr)
- (if (!= l/1035 1)
-   (let x/1061 (app (load f/1034) (load l/1035) f/1034 addr)
-     (alloc 2048 x/1061
-       (app "camlCode__map1_1059" f/1034 (load (+a l/1035 4)) env/1052 addr)))
-   (load (+a env/1052 12))))
+(function camlCode__fun_1044 (x/1037: addr) (+ x/1037 2))
 
 (function camlCode__entry ()
- (let f/1045 "camlCode__6" "camlCode__5" []
-   (let
-     (z/1031 (app{:0,0-0} "camlCode__map_1046" f/1045 "camlCode__1" addr)
-      clos/1054 (alloc 4343 "caml_curry2" 5 "camlCode__map1_1033" z/1031))
-     (store "camlCode" clos/1054)
-     (let (env/1057 (load "camlCode") f/1058 "camlCode__4") "camlCode__3" 
-       []
-       (let
-         list1/1039
-           (app "camlCode__map1_1059" f/1058 "camlCode__2" env/1057 addr)
-         (store (+a "camlCode" 4) list1/1039) 1a)))))
+ (let clos/1043 "camlCode__3" (store "camlCode" clos/1043))
+ (let
+   list/1036
+     (app "camlCode__map_1030" "camlCode__2" "camlCode__1" (load "camlCode")
+       addr)
+   (store (+a "camlCode" 8) list/1036))
+ 1a)
 
 (data)
 -dlinear
-Before simplify
-camlCode__fun_1043:
-                  I/9[%eax] := I/9[%eax] + 2
-                  return R/0[%eax]
-                  *** Linearized code
-camlCode__fun_1043:
-  I/9[%eax] := I/9[%eax] + 2
-  return R/0[%eax]
+size of camlCode__fun_1044
+lambda size = 3
+camlCode__fun_1044 should be inlined
+Second pass of inlining...
+Label camlCode__map_1030 found
+Label camlCode__map_1030 found
+*** Linearized code
+camlCode__map_1030:
+  f/29[%rsi] := R/0[%rax]
+  if list/30[%rbx] ==s 1 goto L100
+  spilled-env/40[s2] := env/31[%rdi] (spill)
+  spilled-list/42[s0] := list/30[%rbx] (spill)
+  spilled-f/41[s1] := f/29[%rsi] (spill)
+  A/33[%rax] := [list/30[%rbx]]
+  A/34[%rdi] := [f/29[%rsi]]
+  R/1[%rbx] := f/29[%rsi]
+  {spilled-env/40[s2]* spilled-f/41[s1]* spilled-list/42[s0]*}
+  R/0[%rax] := call A/34[%rdi] R/0[%rax] R/1[%rbx]
+  spilled-x/39[s3] := x/35[%rax] (spill)
+  list/43[%rax] := spilled-list/42[s0] (reload)
+  A/36[%rbx] := [list/43[%rax] + 8]
+  f/44[%rax] := spilled-f/41[s1] (reload)
+  env/45[%rdi] := spilled-env/40[s2] (reload)
+  {spilled-x/39[s3]*}
+  R/0[%rax] := call "camlCode__map_1030" R/0[%rax] R/1[%rbx] R/2[%rdi]
+  A/37[%rdi] := R/0[%rax]
+  {A/37[%rdi]* spilled-x/39[s3]*}
+  A/38[%rax] := alloc 24
+  [A/38[%rax] + -8] := 2048
+  x/46[%rbx] := spilled-x/39[s3] (reload)
+  [A/38[%rax]] := x/46[%rbx]
+  [A/38[%rax] + 8] := A/37[%rdi]
+  reload retaddr
+  return R/0[%rax]
+  L100:
+  A/32[%rax] := 1
+  reload retaddr
+  return R/0[%rax]
   
-Before simplify
-camlCode__map_1046:
-                  f/8[%edx] := R/0[%eax]
-                  if param/9[%ebx] ==s 1 goto L101
-                  spilled-f/19[s0] := f/8[%edx] (spill)
-                  l/11[%eax] := [param/9[%ebx] + 4]
-                  spilled-l/18[s1] := l/11[%eax] (spill)
-                  a/12[%eax] := [param/9[%ebx]]
-                  A/13[%ecx] := [f/8[%edx]]
-                  R/1[%ebx] := f/8[%edx]
-                  {spilled-l/18[s1]* spilled-f/19[s0]*}
-                  R/0[%eax] := call A/13[%ecx] R/0[%eax] R/1[%ebx] {list.ml:57,20-23}
-                  spilled-r/17[s2] := r/14[%eax] (spill)
-                  f/20[%eax] := spilled-f/19[s0] (reload)
-                  l/21[%ebx] := spilled-l/18[s1] (reload)
-                  {spilled-r/17[s2]*}
-                  R/0[%eax] := call "camlCode__map_1046" R/0[%eax] R/1[%ebx] {list.ml:57,32-39}
-                  A/15[%ecx] := R/0[%eax]
-                  {A/15[%ecx]* spilled-r/17[s2]*}
-                  A/16[%eax] := alloc 12
-                  [A/16[%eax] + -4] := 2048
-                  r/22[%ebx] := spilled-r/17[s2] (reload)
-                  [A/16[%eax]] := r/22[%ebx]
-                  [A/16[%eax] + 4] := A/15[%ecx]
-                  reload retaddr
-                  return R/0[%eax]
-                  L101 [0]:
-                  A/10[%eax] := 1
-                  reload retaddr
-                  return R/0[%eax]
-                  *** Linearized code
-camlCode__map_1046:
-  f/8[%edx] := R/0[%eax]
-  if param/9[%ebx] ==s 1 goto L101
-  spilled-f/19[s0] := f/8[%edx] (spill)
-  l/11[%eax] := [param/9[%ebx] + 4]
-  spilled-l/18[s1] := l/11[%eax] (spill)
-  a/12[%eax] := [param/9[%ebx]]
-  A/13[%ecx] := [f/8[%edx]]
-  R/1[%ebx] := f/8[%edx]
-  {spilled-l/18[s1]* spilled-f/19[s0]*}
-  R/0[%eax] := call A/13[%ecx] R/0[%eax] R/1[%ebx] {list.ml:57,20-23}
-  spilled-r/17[s2] := r/14[%eax] (spill)
-  f/20[%eax] := spilled-f/19[s0] (reload)
-  l/21[%ebx] := spilled-l/18[s1] (reload)
-  {spilled-r/17[s2]*}
-  R/0[%eax] := call "camlCode__map_1046" R/0[%eax] R/1[%ebx] {list.ml:57,32-39}
-  A/15[%ecx] := R/0[%eax]
-  {A/15[%ecx]* spilled-r/17[s2]*}
-  A/16[%eax] := alloc 12
-  [A/16[%eax] + -4] := 2048
-  r/22[%ebx] := spilled-r/17[s2] (reload)
-  [A/16[%eax]] := r/22[%ebx]
-  [A/16[%eax] + 4] := A/15[%ecx]
-  reload retaddr
-  return R/0[%eax]
-  L101 [2]:
-  A/10[%eax] := 1
-  reload retaddr
-  return R/0[%eax]
+*** Linearized code
+camlCode__fun_1044:
+  I/30[%rax] := I/30[%rax] + 2
+  return R/0[%rax]
   
-Before simplify
-camlCode__map1_1033:
-                  f/8[%edx] := R/0[%eax]
-                  if l/9[%ebx] ==s 1 goto L108
-                  spilled-env/19[s2] := env/10[%ecx] (spill)
-                  spilled-l/21[s0] := l/9[%ebx] (spill)
-                  spilled-f/20[s1] := f/8[%edx] (spill)
-                  A/12[%eax] := [l/9[%ebx]]
-                  A/13[%ecx] := [f/8[%edx]]
-                  R/1[%ebx] := f/8[%edx]
-                  {spilled-env/19[s2]* spilled-f/20[s1]* spilled-l/21[s0]*}
-                  R/0[%eax] := call A/13[%ecx] R/0[%eax] R/1[%ebx]
-                  spilled-x/18[s3] := x/14[%eax] (spill)
-                  l/22[%eax] := spilled-l/21[s0] (reload)
-                  A/15[%ebx] := [l/22[%eax] + 4]
-                  f/23[%eax] := spilled-f/20[s1] (reload)
-                  env/24[%ecx] := spilled-env/19[s2] (reload)
-                  {spilled-x/18[s3]*}
-                  R/0[%eax] := call "camlCode__map1_1033" R/0[%eax] R/1[%ebx] R/2[%ecx]
-                  A/16[%ecx] := R/0[%eax]
-                  {A/16[%ecx]* spilled-x/18[s3]*}
-                  A/17[%eax] := alloc 12
-                  [A/17[%eax] + -4] := 2048
-                  x/25[%ebx] := spilled-x/18[s3] (reload)
-                  [A/17[%eax]] := x/25[%ebx]
-                  [A/17[%eax] + 4] := A/16[%ecx]
-                  reload retaddr
-                  return R/0[%eax]
-                  L108 [0]:
-                  A/11[%eax] := [env/10[%ecx] + 12]
-                  reload retaddr
-                  return R/0[%eax]
-                  *** Linearized code
-camlCode__map1_1033:
-  f/8[%edx] := R/0[%eax]
-  if l/9[%ebx] ==s 1 goto L108
-  spilled-env/19[s2] := env/10[%ecx] (spill)
-  spilled-l/21[s0] := l/9[%ebx] (spill)
-  spilled-f/20[s1] := f/8[%edx] (spill)
-  A/12[%eax] := [l/9[%ebx]]
-  A/13[%ecx] := [f/8[%edx]]
-  R/1[%ebx] := f/8[%edx]
-  {spilled-env/19[s2]* spilled-f/20[s1]* spilled-l/21[s0]*}
-  R/0[%eax] := call A/13[%ecx] R/0[%eax] R/1[%ebx]
-  spilled-x/18[s3] := x/14[%eax] (spill)
-  l/22[%eax] := spilled-l/21[s0] (reload)
-  A/15[%ebx] := [l/22[%eax] + 4]
-  f/23[%eax] := spilled-f/20[s1] (reload)
-  env/24[%ecx] := spilled-env/19[s2] (reload)
-  {spilled-x/18[s3]*}
-  R/0[%eax] := call "camlCode__map1_1033" R/0[%eax] R/1[%ebx] R/2[%ecx]
-  A/16[%ecx] := R/0[%eax]
-  {A/16[%ecx]* spilled-x/18[s3]*}
-  A/17[%eax] := alloc 12
-  [A/17[%eax] + -4] := 2048
-  x/25[%ebx] := spilled-x/18[s3] (reload)
-  [A/17[%eax]] := x/25[%ebx]
-  [A/17[%eax] + 4] := A/16[%ecx]
-  reload retaddr
-  return R/0[%eax]
-  L108 [2]:
-  A/11[%eax] := [env/10[%ecx] + 12]
-  reload retaddr
-  return R/0[%eax]
-  
-Before simplify
-camlCode__fun_1055:
-                  I/9[%eax] := I/9[%eax] + 2
-                  return R/0[%eax]
-                  *** Linearized code
-camlCode__fun_1055:
-  I/9[%eax] := I/9[%eax] + 2
-  return R/0[%eax]
-  
-Before simplify
-camlCode__map1_1059:
-                  f/8[%edx] := R/0[%eax]
-                  if l/9[%ebx] ==s 1 goto L116
-                  spilled-env/19[s2] := env/10[%ecx] (spill)
-                  spilled-l/21[s0] := l/9[%ebx] (spill)
-                  spilled-f/20[s1] := f/8[%edx] (spill)
-                  A/12[%eax] := [l/9[%ebx]]
-                  A/13[%ecx] := [f/8[%edx]]
-                  R/1[%ebx] := f/8[%edx]
-                  {spilled-env/19[s2]* spilled-f/20[s1]* spilled-l/21[s0]*}
-                  R/0[%eax] := call A/13[%ecx] R/0[%eax] R/1[%ebx]
-                  spilled-x/18[s3] := x/14[%eax] (spill)
-                  l/22[%eax] := spilled-l/21[s0] (reload)
-                  A/15[%ebx] := [l/22[%eax] + 4]
-                  f/23[%eax] := spilled-f/20[s1] (reload)
-                  env/24[%ecx] := spilled-env/19[s2] (reload)
-                  {spilled-x/18[s3]*}
-                  R/0[%eax] := call "camlCode__map1_1059" R/0[%eax] R/1[%ebx] R/2[%ecx]
-                  A/16[%ecx] := R/0[%eax]
-                  {A/16[%ecx]* spilled-x/18[s3]*}
-                  A/17[%eax] := alloc 12
-                  [A/17[%eax] + -4] := 2048
-                  x/25[%ebx] := spilled-x/18[s3] (reload)
-                  [A/17[%eax]] := x/25[%ebx]
-                  [A/17[%eax] + 4] := A/16[%ecx]
-                  reload retaddr
-                  return R/0[%eax]
-                  L116 [0]:
-                  A/11[%eax] := [env/10[%ecx] + 12]
-                  reload retaddr
-                  return R/0[%eax]
-                  *** Linearized code
-camlCode__map1_1059:
-  f/8[%edx] := R/0[%eax]
-  if l/9[%ebx] ==s 1 goto L116
-  spilled-env/19[s2] := env/10[%ecx] (spill)
-  spilled-l/21[s0] := l/9[%ebx] (spill)
-  spilled-f/20[s1] := f/8[%edx] (spill)
-  A/12[%eax] := [l/9[%ebx]]
-  A/13[%ecx] := [f/8[%edx]]
-  R/1[%ebx] := f/8[%edx]
-  {spilled-env/19[s2]* spilled-f/20[s1]* spilled-l/21[s0]*}
-  R/0[%eax] := call A/13[%ecx] R/0[%eax] R/1[%ebx]
-  spilled-x/18[s3] := x/14[%eax] (spill)
-  l/22[%eax] := spilled-l/21[s0] (reload)
-  A/15[%ebx] := [l/22[%eax] + 4]
-  f/23[%eax] := spilled-f/20[s1] (reload)
-  env/24[%ecx] := spilled-env/19[s2] (reload)
-  {spilled-x/18[s3]*}
-  R/0[%eax] := call "camlCode__map1_1059" R/0[%eax] R/1[%ebx] R/2[%ecx]
-  A/16[%ecx] := R/0[%eax]
-  {A/16[%ecx]* spilled-x/18[s3]*}
-  A/17[%eax] := alloc 12
-  [A/17[%eax] + -4] := 2048
-  x/25[%ebx] := spilled-x/18[s3] (reload)
-  [A/17[%eax]] := x/25[%ebx]
-  [A/17[%eax] + 4] := A/16[%ecx]
-  reload retaddr
-  return R/0[%eax]
-  L116 [2]:
-  A/11[%eax] := [env/10[%ecx] + 12]
-  reload retaddr
-  return R/0[%eax]
-  
-Before simplify
+*** Linearized code
 camlCode__entry:
-                  f/8[%eax] := "camlCode__6"
-                  A/9[%ebx] := "camlCode__5"
-                  A/10[%ebx] := "camlCode__1"
-                  {}
-                  R/0[%eax] := call "camlCode__map_1046" R/0[%eax] R/1[%ebx] {:0,0-0}
-                  z/11[%ebx] := R/0[%eax]
-                  {z/11[%ebx]*}
-                  clos/12[%eax] := alloc 20
-                  [clos/12[%eax] + -4] := 4343
-                  [clos/12[%eax]] := "caml_curry2"
-                  [clos/12[%eax] + 4] := 5
-                  [clos/12[%eax] + 8] := "camlCode__map1_1033"
-                  [clos/12[%eax] + 12] := z/11[%ebx]
-                  ["camlCode"] := clos/12[%eax]
-                  env/13[%ecx] := ["camlCode"]
-                  f/14[%eax] := "camlCode__4"
-                  A/15[%ebx] := "camlCode__3"
-                  A/16[%ebx] := "camlCode__2"
-                  {}
-                  R/0[%eax] := call "camlCode__map1_1059" R/0[%eax] R/1[%ebx] R/2[%ecx]
-                  ["camlCode" + 4] := list1/17[%eax]
-                  A/18[%eax] := 1
-                  reload retaddr
-                  return R/0[%eax]
-                  *** Linearized code
-camlCode__entry:
-  f/8[%eax] := "camlCode__6"
-  A/9[%ebx] := "camlCode__5"
-  A/10[%ebx] := "camlCode__1"
+  clos/29[%rbx] := "camlCode__3"
+  A/30[%rax] := "camlCode"
+  [A/30[%rax]] := clos/29[%rbx]
+  A/31[%rax] := "camlCode"
+  A/32[%rdi] := [A/31[%rax]]
+  A/33[%rbx] := "camlCode__1"
+  A/34[%rax] := "camlCode__2"
   {}
-  R/0[%eax] := call "camlCode__map_1046" R/0[%eax] R/1[%ebx] {:0,0-0}
-  z/11[%ebx] := R/0[%eax]
-  {z/11[%ebx]*}
-  clos/12[%eax] := alloc 20
-  [clos/12[%eax] + -4] := 4343
-  [clos/12[%eax]] := "caml_curry2"
-  [clos/12[%eax] + 4] := 5
-  [clos/12[%eax] + 8] := "camlCode__map1_1033"
-  [clos/12[%eax] + 12] := z/11[%ebx]
-  ["camlCode"] := clos/12[%eax]
-  env/13[%ecx] := ["camlCode"]
-  f/14[%eax] := "camlCode__4"
-  A/15[%ebx] := "camlCode__3"
-  A/16[%ebx] := "camlCode__2"
-  {}
-  R/0[%eax] := call "camlCode__map1_1059" R/0[%eax] R/1[%ebx] R/2[%ecx]
-  ["camlCode" + 4] := list1/17[%eax]
-  A/18[%eax] := 1
+  R/0[%rax] := call "camlCode__map_1030" R/0[%rax] R/1[%rbx] R/2[%rdi]
+  A/36[%rbx] := "camlCode"
+  [A/36[%rbx] + 8] := list/35[%rax]
+  A/37[%rax] := 1
   reload retaddr
-  return R/0[%eax]
+  return R/0[%rax]
   
+-dstartup
+	.section        .rodata.cst8,"a",@progbits
+	.align	16
+caml_negf_mask:	.quad   0x8000000000000000, 0
+	.align	16
+caml_absf_mask:	.quad   0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF
+	.data
+	.globl	caml_startup__data_begin
+caml_startup__data_begin:
+	.text
+	.globl	caml_startup__code_begin
+caml_startup__code_begin:
+	.text
+	.align	16
+	.globl	caml_program
+caml_program:
+	subq	$8, %rsp
+.L100:
+	call	camlPervasives__entry@PLT
+.L101:
+	movq	caml_globals_inited@GOTPCREL(%rip), %rax
+	addq	$1, (%rax)
+	call	camlCode__entry@PLT
+.L102:
+	movq	caml_globals_inited@GOTPCREL(%rip), %rax
+	addq	$1, (%rax)
+	call	camlStd_exit__entry@PLT
+.L103:
+	movq	caml_globals_inited@GOTPCREL(%rip), %rax
+	addq	$1, (%rax)
+	movq	$1, %rax
+	addq	$8, %rsp
+	ret
+	.type	caml_program,@function
+	.size	caml_program,.-caml_program
+	.text
+	.align	16
+	.globl	caml_curry4
+caml_curry4:
+	subq	$8, %rsp
+.L104:
+	movq	%rax, %rsi
+.L105:	subq	$48, %r15
+	movq	caml_young_limit@GOTPCREL(%rip), %rax
+	cmpq	(%rax), %r15
+	jb	.L106
+	leaq	8(%r15), %rax
+	movq	$5367, -8(%rax)
+	movq	caml_curry4_1@GOTPCREL(%rip), %rdi
+	movq	%rdi, (%rax)
+	movq	$7, 8(%rax)
+	movq	caml_curry4_1_app@GOTPCREL(%rip), %rdi
+	movq	%rdi, 16(%rax)
+	movq	%rsi, 24(%rax)
+	movq	%rbx, 32(%rax)
+	addq	$8, %rsp
+	ret
+.L106:	call	caml_call_gc@PLT
+.L107:	jmp	.L105
+	.type	caml_curry4,@function
+	.size	caml_curry4,.-caml_curry4
+	.text
+	.align	16
+	.globl	caml_curry4_1_app
+caml_curry4_1_app:
+.L108:
+	movq	%rax, %r10
+	movq	%rbx, %r9
+	movq	%rdi, %r8
+	movq	32(%rsi), %rdx
+	movq	24(%rsi), %rax
+	movq	16(%rdx), %rcx
+	movq	%r10, %rbx
+	movq	%r9, %rdi
+	movq	%r8, %rsi
+	jmp	*%rcx
+	.type	caml_curry4_1_app,@function
+	.size	caml_curry4_1_app,.-caml_curry4_1_app
+	.text
+	.align	16
+	.globl	caml_curry4_1
+caml_curry4_1:
+	subq	$8, %rsp
+.L109:
+	movq	%rax, %rsi
+.L110:	subq	$48, %r15
+	movq	caml_young_limit@GOTPCREL(%rip), %rax
+	cmpq	(%rax), %r15
+	jb	.L111
+	leaq	8(%r15), %rax
+	movq	$5367, -8(%rax)
+	movq	caml_curry4_2@GOTPCREL(%rip), %rdi
+	movq	%rdi, (%rax)
+	movq	$5, 8(%rax)
+	movq	caml_curry4_2_app@GOTPCREL(%rip), %rdi
+	movq	%rdi, 16(%rax)
+	movq	%rsi, 24(%rax)
+	movq	%rbx, 32(%rax)
+	addq	$8, %rsp
+	ret
+.L111:	call	caml_call_gc@PLT
+.L112:	jmp	.L110
+	.type	caml_curry4_1,@function
+	.size	caml_curry4_1,.-caml_curry4_1
+	.text
+	.align	16
+	.globl	caml_curry4_2_app
+caml_curry4_2_app:
+.L113:
+	movq	%rax, %r8
+	movq	%rbx, %rsi
+	movq	32(%rdi), %rax
+	movq	32(%rax), %rdx
+	movq	24(%rdi), %rbx
+	movq	24(%rax), %rax
+	movq	16(%rdx), %rcx
+	movq	%r8, %rdi
+	jmp	*%rcx
+	.type	caml_curry4_2_app,@function
+	.size	caml_curry4_2_app,.-caml_curry4_2_app
+	.text
+	.align	16
+	.globl	caml_curry4_2
+caml_curry4_2:
+	subq	$8, %rsp
+.L114:
+	movq	%rax, %rsi
+.L115:	subq	$40, %r15
+	movq	caml_young_limit@GOTPCREL(%rip), %rax
+	cmpq	(%rax), %r15
+	jb	.L116
+	leaq	8(%r15), %rax
+	movq	$4343, -8(%rax)
+	movq	caml_curry4_3@GOTPCREL(%rip), %rdi
+	movq	%rdi, (%rax)
+	movq	$3, 8(%rax)
+	movq	%rsi, 16(%rax)
+	movq	%rbx, 24(%rax)
+	addq	$8, %rsp
+	ret
+.L116:	call	caml_call_gc@PLT
+.L117:	jmp	.L115
+	.type	caml_curry4_2,@function
+	.size	caml_curry4_2,.-caml_curry4_2
+	.text
+	.align	16
+	.globl	caml_curry4_3
+caml_curry4_3:
+.L118:
+	movq	%rax, %rsi
+	movq	24(%rbx), %rcx
+	movq	32(%rcx), %rax
+	movq	32(%rax), %rdx
+	movq	16(%rbx), %rdi
+	movq	24(%rcx), %rbx
+	movq	24(%rax), %rax
+	movq	16(%rdx), %rcx
+	jmp	*%rcx
+	.type	caml_curry4_3,@function
+	.size	caml_curry4_3,.-caml_curry4_3
+	.text
+	.align	16
+	.globl	caml_curry3
+caml_curry3:
+	subq	$8, %rsp
+.L119:
+	movq	%rax, %rsi
+.L120:	subq	$48, %r15
+	movq	caml_young_limit@GOTPCREL(%rip), %rax
+	cmpq	(%rax), %r15
+	jb	.L121
+	leaq	8(%r15), %rax
+	movq	$5367, -8(%rax)
+	movq	caml_curry3_1@GOTPCREL(%rip), %rdi
+	movq	%rdi, (%rax)
+	movq	$5, 8(%rax)
+	movq	caml_curry3_1_app@GOTPCREL(%rip), %rdi
+	movq	%rdi, 16(%rax)
+	movq	%rsi, 24(%rax)
+	movq	%rbx, 32(%rax)
+	addq	$8, %rsp
+	ret
+.L121:	call	caml_call_gc@PLT
+.L122:	jmp	.L120
+	.type	caml_curry3,@function
+	.size	caml_curry3,.-caml_curry3
+	.text
+	.align	16
+	.globl	caml_curry3_1_app
+caml_curry3_1_app:
+.L123:
+	movq	%rax, %r8
+	movq	%rbx, %rcx
+	movq	32(%rdi), %rsi
+	movq	24(%rdi), %rax
+	movq	16(%rsi), %rdx
+	movq	%r8, %rbx
+	movq	%rcx, %rdi
+	jmp	*%rdx
+	.type	caml_curry3_1_app,@function
+	.size	caml_curry3_1_app,.-caml_curry3_1_app
+	.text
+	.align	16
+	.globl	caml_curry3_1
+caml_curry3_1:
+	subq	$8, %rsp
+.L124:
+	movq	%rax, %rsi
+.L125:	subq	$40, %r15
+	movq	caml_young_limit@GOTPCREL(%rip), %rax
+	cmpq	(%rax), %r15
+	jb	.L126
+	leaq	8(%r15), %rax
+	movq	$4343, -8(%rax)
+	movq	caml_curry3_2@GOTPCREL(%rip), %rdi
+	movq	%rdi, (%rax)
+	movq	$3, 8(%rax)
+	movq	%rsi, 16(%rax)
+	movq	%rbx, 24(%rax)
+	addq	$8, %rsp
+	ret
+.L126:	call	caml_call_gc@PLT
+.L127:	jmp	.L125
+	.type	caml_curry3_1,@function
+	.size	caml_curry3_1,.-caml_curry3_1
+	.text
+	.align	16
+	.globl	caml_curry3_2
+caml_curry3_2:
+.L128:
+	movq	%rax, %rdi
+	movq	24(%rbx), %rax
+	movq	32(%rax), %rsi
+	movq	16(%rbx), %rbx
+	movq	24(%rax), %rax
+	movq	16(%rsi), %rdx
+	jmp	*%rdx
+	.type	caml_curry3_2,@function
+	.size	caml_curry3_2,.-caml_curry3_2
+	.text
+	.align	16
+	.globl	caml_curry2
+caml_curry2:
+	subq	$8, %rsp
+.L129:
+	movq	%rax, %rsi
+.L130:	subq	$40, %r15
+	movq	caml_young_limit@GOTPCREL(%rip), %rax
+	cmpq	(%rax), %r15
+	jb	.L131
+	leaq	8(%r15), %rax
+	movq	$4343, -8(%rax)
+	movq	caml_curry2_1@GOTPCREL(%rip), %rdi
+	movq	%rdi, (%rax)
+	movq	$3, 8(%rax)
+	movq	%rsi, 16(%rax)
+	movq	%rbx, 24(%rax)
+	addq	$8, %rsp
+	ret
+.L131:	call	caml_call_gc@PLT
+.L132:	jmp	.L130
+	.type	caml_curry2,@function
+	.size	caml_curry2,.-caml_curry2
+	.text
+	.align	16
+	.globl	caml_curry2_1
+caml_curry2_1:
+.L133:
+	movq	%rax, %rdx
+	movq	24(%rbx), %rdi
+	movq	16(%rbx), %rax
+	movq	16(%rdi), %rsi
+	movq	%rdx, %rbx
+	jmp	*%rsi
+	.type	caml_curry2_1,@function
+	.size	caml_curry2_1,.-caml_curry2_1
+	.text
+	.align	16
+	.globl	caml_apply3
+caml_apply3:
+	subq	$24, %rsp
+.L135:
+	movq	8(%rsi), %rdx
+	cmpq	$7, %rdx
+	jne	.L134
+	movq	16(%rsi), %rdx
+	addq	$24, %rsp
+	jmp	*%rdx
+	.align	4
+.L134:
+	movq	%rdi, 8(%rsp)
+	movq	%rbx, 0(%rsp)
+	movq	(%rsi), %rdi
+	movq	%rsi, %rbx
+	call	*%rdi
+.L136:
+	movq	%rax, %rbx
+	movq	(%rbx), %rdi
+	movq	0(%rsp), %rax
+	call	*%rdi
+.L137:
+	movq	%rax, %rbx
+	movq	(%rbx), %rdi
+	movq	8(%rsp), %rax
+	addq	$24, %rsp
+	jmp	*%rdi
+	.type	caml_apply3,@function
+	.size	caml_apply3,.-caml_apply3
+	.text
+	.align	16
+	.globl	caml_apply2
+caml_apply2:
+	subq	$8, %rsp
+.L139:
+	movq	8(%rdi), %rsi
+	cmpq	$5, %rsi
+	jne	.L138
+	movq	16(%rdi), %rsi
+	addq	$8, %rsp
+	jmp	*%rsi
+	.align	4
+.L138:
+	movq	%rbx, 0(%rsp)
+	movq	(%rdi), %rsi
+	movq	%rdi, %rbx
+	call	*%rsi
+.L140:
+	movq	%rax, %rbx
+	movq	(%rbx), %rdi
+	movq	0(%rsp), %rax
+	addq	$8, %rsp
+	jmp	*%rdi
+	.type	caml_apply2,@function
+	.size	caml_apply2,.-caml_apply2
+	.data
+	.globl	caml_exn_Out_of_memory
+	.quad	1024
+caml_exn_Out_of_memory:
+	.quad	.L100001
+	.quad	2300
+.L100001:
+	.ascii	"Out_of_memory"
+	.space	2
+	.byte	2
+	.globl	caml_bucket_Out_of_memory
+	.quad	1024
+caml_bucket_Out_of_memory:
+	.quad	caml_exn_Out_of_memory
+	.data
+	.globl	caml_exn_Sys_error
+	.quad	1024
+caml_exn_Sys_error:
+	.quad	.L100002
+	.quad	2300
+.L100002:
+	.ascii	"Sys_error"
+	.space	6
+	.byte	6
+	.globl	caml_bucket_Sys_error
+	.quad	1024
+caml_bucket_Sys_error:
+	.quad	caml_exn_Sys_error
+	.data
+	.globl	caml_exn_Failure
+	.quad	1024
+caml_exn_Failure:
+	.quad	.L100003
+	.quad	1276
+.L100003:
+	.ascii	"Failure"
+	.byte	0
+	.globl	caml_bucket_Failure
+	.quad	1024
+caml_bucket_Failure:
+	.quad	caml_exn_Failure
+	.data
+	.globl	caml_exn_Invalid_argument
+	.quad	1024
+caml_exn_Invalid_argument:
+	.quad	.L100004
+	.quad	3324
+.L100004:
+	.ascii	"Invalid_argument"
+	.space	7
+	.byte	7
+	.globl	caml_bucket_Invalid_argument
+	.quad	1024
+caml_bucket_Invalid_argument:
+	.quad	caml_exn_Invalid_argument
+	.data
+	.globl	caml_exn_End_of_file
+	.quad	1024
+caml_exn_End_of_file:
+	.quad	.L100005
+	.quad	2300
+.L100005:
+	.ascii	"End_of_file"
+	.space	4
+	.byte	4
+	.globl	caml_bucket_End_of_file
+	.quad	1024
+caml_bucket_End_of_file:
+	.quad	caml_exn_End_of_file
+	.data
+	.globl	caml_exn_Division_by_zero
+	.quad	1024
+caml_exn_Division_by_zero:
+	.quad	.L100006
+	.quad	3324
+.L100006:
+	.ascii	"Division_by_zero"
+	.space	7
+	.byte	7
+	.globl	caml_bucket_Division_by_zero
+	.quad	1024
+caml_bucket_Division_by_zero:
+	.quad	caml_exn_Division_by_zero
+	.data
+	.globl	caml_exn_Not_found
+	.quad	1024
+caml_exn_Not_found:
+	.quad	.L100007
+	.quad	2300
+.L100007:
+	.ascii	"Not_found"
+	.space	6
+	.byte	6
+	.globl	caml_bucket_Not_found
+	.quad	1024
+caml_bucket_Not_found:
+	.quad	caml_exn_Not_found
+	.data
+	.globl	caml_exn_Match_failure
+	.quad	1024
+caml_exn_Match_failure:
+	.quad	.L100008
+	.quad	2300
+.L100008:
+	.ascii	"Match_failure"
+	.space	2
+	.byte	2
+	.globl	caml_bucket_Match_failure
+	.quad	1024
+caml_bucket_Match_failure:
+	.quad	caml_exn_Match_failure
+	.data
+	.globl	caml_exn_Stack_overflow
+	.quad	1024
+caml_exn_Stack_overflow:
+	.quad	.L100009
+	.quad	2300
+.L100009:
+	.ascii	"Stack_overflow"
+	.space	1
+	.byte	1
+	.globl	caml_bucket_Stack_overflow
+	.quad	1024
+caml_bucket_Stack_overflow:
+	.quad	caml_exn_Stack_overflow
+	.data
+	.globl	caml_exn_Sys_blocked_io
+	.quad	1024
+caml_exn_Sys_blocked_io:
+	.quad	.L100010
+	.quad	2300
+.L100010:
+	.ascii	"Sys_blocked_io"
+	.space	1
+	.byte	1
+	.globl	caml_bucket_Sys_blocked_io
+	.quad	1024
+caml_bucket_Sys_blocked_io:
+	.quad	caml_exn_Sys_blocked_io
+	.data
+	.globl	caml_exn_Assert_failure
+	.quad	1024
+caml_exn_Assert_failure:
+	.quad	.L100011
+	.quad	2300
+.L100011:
+	.ascii	"Assert_failure"
+	.space	1
+	.byte	1
+	.globl	caml_bucket_Assert_failure
+	.quad	1024
+caml_bucket_Assert_failure:
+	.quad	caml_exn_Assert_failure
+	.data
+	.globl	caml_exn_Undefined_recursive_module
+	.quad	1024
+caml_exn_Undefined_recursive_module:
+	.quad	.L100012
+	.quad	4348
+.L100012:
+	.ascii	"Undefined_recursive_module"
+	.space	5
+	.byte	5
+	.globl	caml_bucket_Undefined_recursive_module
+	.quad	1024
+caml_bucket_Undefined_recursive_module:
+	.quad	caml_exn_Undefined_recursive_module
+	.data
+	.globl	caml_globals
+caml_globals:
+	.quad	camlPervasives
+	.quad	camlCode
+	.quad	camlStd_exit
+	.quad	0
+	.data
+	.globl	caml_globals_map
+	.quad	21756
+caml_globals_map:
+	.ascii	"\204\225\246\276\0\0\0\222\0\0\0\22\0\0\0P\0\0\0A\240\300*Pervasives0\333r:\27\230\261\42\340\211\31\242\277\355\6%\24\60+h\272\320\331*\363\303]\334'\344I\276\362\223\240\4\4@\240\300$Code0\31"
+	.ascii	"j=c\276\30*G=\13\5\271VLHq0\273\206\200\325\312\205\244\34v\234\375\257=\316\11>\240\4\4@\240\300(Std_exit0K<u\217\27kw\366\203\3\37W\376u\277\312\60O\31\364*\11\203\263\235i\277\261\26\373?\370"
+	.ascii	"\276\240\4\4@@"
+	.space	1
+	.byte	1
+	.data
+	.globl	caml_data_segments
+caml_data_segments:
+	.quad	caml_startup__data_begin
+	.quad	caml_startup__data_end
+	.quad	camlPervasives__data_begin
+	.quad	camlPervasives__data_end
+	.quad	camlCode__data_begin
+	.quad	camlCode__data_end
+	.quad	camlStd_exit__data_begin
+	.quad	camlStd_exit__data_end
+	.quad	0
+	.data
+	.globl	caml_code_segments
+caml_code_segments:
+	.quad	caml_startup__code_begin
+	.quad	caml_startup__code_end
+	.quad	camlPervasives__code_begin
+	.quad	camlPervasives__code_end
+	.quad	camlCode__code_begin
+	.quad	camlCode__code_end
+	.quad	camlStd_exit__code_begin
+	.quad	camlStd_exit__code_end
+	.quad	0
+	.data
+	.globl	caml_frametable
+caml_frametable:
+	.quad	caml_startup__frametable
+	.quad	caml_system__frametable
+	.quad	camlPervasives__frametable
+	.quad	camlCode__frametable
+	.quad	camlStd_exit__frametable
+	.quad	0
+	.text
+	.globl	caml_startup__code_end
+caml_startup__code_end:
+	.data
+	.globl	caml_startup__data_end
+caml_startup__data_end:
+	.long	0
+	.globl	caml_startup__frametable
+caml_startup__frametable:
+	.quad	12
+	.quad	.L140
+	.word	16
+	.word	1
+	.word	0
+	.align	8
+	.quad	.L137
+	.word	32
+	.word	1
+	.word	8
+	.align	8
+	.quad	.L136
+	.word	32
+	.word	2
+	.word	0
+	.word	8
+	.align	8
+	.quad	.L132
+	.word	16
+	.word	2
+	.word	3
+	.word	7
+	.align	8
+	.quad	.L127
+	.word	16
+	.word	2
+	.word	3
+	.word	7
+	.align	8
+	.quad	.L122
+	.word	16
+	.word	2
+	.word	3
+	.word	7
+	.align	8
+	.quad	.L117
+	.word	16
+	.word	2
+	.word	3
+	.word	7
+	.align	8
+	.quad	.L112
+	.word	16
+	.word	2
+	.word	3
+	.word	7
+	.align	8
+	.quad	.L107
+	.word	16
+	.word	2
+	.word	3
+	.word	7
+	.align	8
+	.quad	.L103
+	.word	16
+	.word	0
+	.align	8
+	.quad	.L102
+	.word	16
+	.word	0
+	.align	8
+	.quad	.L101
+	.word	16
+	.word	0
+	.align	8
+	.section .note.GNU-stack,"",%progbits
 -S
+	.section        .rodata.cst8,"a",@progbits
+	.align	16
+caml_negf_mask:	.quad   0x8000000000000000, 0
+	.align	16
+caml_absf_mask:	.quad   0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF
 	.data
 	.globl	camlCode__data_begin
 camlCode__data_begin:
@@ -670,251 +901,116 @@ camlCode__data_begin:
 	.globl	camlCode__code_begin
 camlCode__code_begin:
 	.data
-	.long	2048
+	.quad	2048
 	.globl	camlCode
 camlCode:
-	.space	8
+	.space	16
 	.data
-	.long	3319
+	.quad	2295
+camlCode__2:
+	.quad	camlCode__fun_1044
+	.quad	3
+	.data
+	.quad	3319
 camlCode__3:
-	.long	caml_curry2
-	.long	5
-	.long	camlCode__map1_1059
-	.data
-	.long	2295
-camlCode__4:
-	.long	camlCode__fun_1055
-	.long	3
-	.data
-	.long	3319
-camlCode__5:
-	.long	caml_curry2
-	.long	5
-	.long	camlCode__map_1046
-	.data
-	.long	2295
-camlCode__6:
-	.long	camlCode__fun_1043
-	.long	3
+	.quad	caml_curry2
+	.quad	5
+	.quad	camlCode__map_1030
 	.data
 	.globl	camlCode__1
-	.long	2048
+	.quad	2048
 camlCode__1:
-	.long	3
-	.long	.L100011
-	.long	2048
-.L100011:
-	.long	5
-	.long	.L100012
-	.long	2048
-.L100012:
-	.long	7
-	.long	1
-	.data
-	.globl	camlCode__2
-	.long	2048
-camlCode__2:
-	.long	3
-	.long	.L100007
-	.long	2048
+	.quad	3
+	.quad	.L100004
+	.quad	2048
+.L100004:
+	.quad	5
+	.quad	.L100005
+	.quad	2048
+.L100005:
+	.quad	7
+	.quad	.L100006
+	.quad	2048
+.L100006:
+	.quad	9
+	.quad	.L100007
+	.quad	2048
 .L100007:
-	.long	5
-	.long	.L100008
-	.long	2048
-.L100008:
-	.long	7
-	.long	.L100009
-	.long	2048
-.L100009:
-	.long	9
-	.long	.L100010
-	.long	2048
-.L100010:
-	.long	11
-	.long	1
+	.quad	11
+	.quad	1
 	.text
 	.align	16
-	.globl	camlCode__fun_1043
-camlCode__fun_1043:
-.L100:
-	addl	$2, %eax
-	ret
-	.type	camlCode__fun_1043,@function
-	.size	camlCode__fun_1043,.-camlCode__fun_1043
-	.text
-	.align	16
-	.globl	camlCode__map_1046
-camlCode__map_1046:
-	subl	$12, %esp
-.L102:
-	movl	%eax, %edx
-	cmpl	$1, %ebx
-	je	.L101
-	movl	%edx, 0(%esp)
-	movl	4(%ebx), %eax
-	movl	%eax, 4(%esp)
-	movl	(%ebx), %eax
-	movl	(%edx), %ecx
-	movl	%edx, %ebx
-	call	*%ecx
-.L103:
-	movl	%eax, 8(%esp)
-	movl	0(%esp), %eax
-	movl	4(%esp), %ebx
-	call	camlCode__map_1046
-.L104:
-	movl	%eax, %ecx
-.L105:	movl	caml_young_ptr, %eax
-	subl	$12, %eax
-	movl	%eax, caml_young_ptr
-	cmpl	caml_young_limit, %eax
-	jb	.L106
-	leal	4(%eax), %eax
-	movl	$2048, -4(%eax)
-	movl	8(%esp), %ebx
-	movl	%ebx, (%eax)
-	movl	%ecx, 4(%eax)
-	addl	$12, %esp
-	ret
-	.align	16
+	.globl	camlCode__map_1030
+camlCode__map_1030:
+	subq	$40, %rsp
 .L101:
-	movl	$1, %eax
-	addl	$12, %esp
+	movq	%rax, %rsi
+	cmpq	$1, %rbx
+	je	.L100
+	movq	%rdi, 16(%rsp)
+	movq	%rbx, 0(%rsp)
+	movq	%rsi, 8(%rsp)
+	movq	(%rbx), %rax
+	movq	(%rsi), %rdi
+	movq	%rsi, %rbx
+	call	*%rdi
+.L102:
+	movq	%rax, 24(%rsp)
+	movq	0(%rsp), %rax
+	movq	8(%rax), %rbx
+	movq	8(%rsp), %rax
+	movq	16(%rsp), %rdi
+	call	camlCode__map_1030@PLT
+.L103:
+	movq	%rax, %rdi
+.L104:	subq	$24, %r15
+	movq	caml_young_limit@GOTPCREL(%rip), %rax
+	cmpq	(%rax), %r15
+	jb	.L105
+	leaq	8(%r15), %rax
+	movq	$2048, -8(%rax)
+	movq	24(%rsp), %rbx
+	movq	%rbx, (%rax)
+	movq	%rdi, 8(%rax)
+	addq	$40, %rsp
 	ret
-.L106:	call	caml_call_gc
-.L107:	jmp	.L105
-	.type	camlCode__map_1046,@function
-	.size	camlCode__map_1046,.-camlCode__map_1046
+	.align	4
+.L100:
+	movq	$1, %rax
+	addq	$40, %rsp
+	ret
+.L105:	call	caml_call_gc@PLT
+.L106:	jmp	.L104
+	.type	camlCode__map_1030,@function
+	.size	camlCode__map_1030,.-camlCode__map_1030
 	.text
 	.align	16
-	.globl	camlCode__map1_1033
-camlCode__map1_1033:
-	subl	$16, %esp
-.L109:
-	movl	%eax, %edx
-	cmpl	$1, %ebx
-	je	.L108
-	movl	%ecx, 8(%esp)
-	movl	%ebx, 0(%esp)
-	movl	%edx, 4(%esp)
-	movl	(%ebx), %eax
-	movl	(%edx), %ecx
-	movl	%edx, %ebx
-	call	*%ecx
-.L110:
-	movl	%eax, 12(%esp)
-	movl	0(%esp), %eax
-	movl	4(%eax), %ebx
-	movl	4(%esp), %eax
-	movl	8(%esp), %ecx
-	call	camlCode__map1_1033
-.L111:
-	movl	%eax, %ecx
-.L112:	movl	caml_young_ptr, %eax
-	subl	$12, %eax
-	movl	%eax, caml_young_ptr
-	cmpl	caml_young_limit, %eax
-	jb	.L113
-	leal	4(%eax), %eax
-	movl	$2048, -4(%eax)
-	movl	12(%esp), %ebx
-	movl	%ebx, (%eax)
-	movl	%ecx, 4(%eax)
-	addl	$16, %esp
+	.globl	camlCode__fun_1044
+camlCode__fun_1044:
+.L107:
+	addq	$2, %rax
 	ret
-	.align	16
-.L108:
-	movl	12(%ecx), %eax
-	addl	$16, %esp
-	ret
-.L113:	call	caml_call_gc
-.L114:	jmp	.L112
-	.type	camlCode__map1_1033,@function
-	.size	camlCode__map1_1033,.-camlCode__map1_1033
-	.text
-	.align	16
-	.globl	camlCode__fun_1055
-camlCode__fun_1055:
-.L115:
-	addl	$2, %eax
-	ret
-	.type	camlCode__fun_1055,@function
-	.size	camlCode__fun_1055,.-camlCode__fun_1055
-	.text
-	.align	16
-	.globl	camlCode__map1_1059
-camlCode__map1_1059:
-	subl	$16, %esp
-.L117:
-	movl	%eax, %edx
-	cmpl	$1, %ebx
-	je	.L116
-	movl	%ecx, 8(%esp)
-	movl	%ebx, 0(%esp)
-	movl	%edx, 4(%esp)
-	movl	(%ebx), %eax
-	movl	(%edx), %ecx
-	movl	%edx, %ebx
-	call	*%ecx
-.L118:
-	movl	%eax, 12(%esp)
-	movl	0(%esp), %eax
-	movl	4(%eax), %ebx
-	movl	4(%esp), %eax
-	movl	8(%esp), %ecx
-	call	camlCode__map1_1059
-.L119:
-	movl	%eax, %ecx
-.L120:	movl	caml_young_ptr, %eax
-	subl	$12, %eax
-	movl	%eax, caml_young_ptr
-	cmpl	caml_young_limit, %eax
-	jb	.L121
-	leal	4(%eax), %eax
-	movl	$2048, -4(%eax)
-	movl	12(%esp), %ebx
-	movl	%ebx, (%eax)
-	movl	%ecx, 4(%eax)
-	addl	$16, %esp
-	ret
-	.align	16
-.L116:
-	movl	12(%ecx), %eax
-	addl	$16, %esp
-	ret
-.L121:	call	caml_call_gc
-.L122:	jmp	.L120
-	.type	camlCode__map1_1059,@function
-	.size	camlCode__map1_1059,.-camlCode__map1_1059
+	.type	camlCode__fun_1044,@function
+	.size	camlCode__fun_1044,.-camlCode__fun_1044
 	.text
 	.align	16
 	.globl	camlCode__entry
 camlCode__entry:
-.L123:
-	movl	$camlCode__6, %eax
-	movl	$camlCode__5, %ebx
-	movl	$camlCode__1, %ebx
-	call	camlCode__map_1046
-.L124:
-	movl	%eax, %ebx
-	movl	$20, %eax
-	call	caml_allocN
-.L125:
-	leal	4(%eax), %eax
-	movl	$4343, -4(%eax)
-	movl	$caml_curry2, (%eax)
-	movl	$5, 4(%eax)
-	movl	$camlCode__map1_1033, 8(%eax)
-	movl	%ebx, 12(%eax)
-	movl	%eax, camlCode
-	movl	camlCode, %ecx
-	movl	$camlCode__4, %eax
-	movl	$camlCode__3, %ebx
-	movl	$camlCode__2, %ebx
-	call	camlCode__map1_1059
-.L126:
-	movl	%eax, camlCode + 4
-	movl	$1, %eax
+	subq	$8, %rsp
+.L108:
+	movq	camlCode__3@GOTPCREL(%rip), %rbx
+	movq	camlCode@GOTPCREL(%rip), %rax
+	movq	%rbx, (%rax)
+	movq	camlCode@GOTPCREL(%rip), %rax
+	movq	(%rax), %rdi
+	movq	camlCode__1@GOTPCREL(%rip), %rbx
+	movq	camlCode__2@GOTPCREL(%rip), %rax
+	call	camlCode__map_1030@PLT
+.L109:
+	movq	camlCode@GOTPCREL(%rip), %rbx
+	movq	%rax, 8(%rbx)
+	movq	$1, %rax
+	addq	$8, %rsp
 	ret
 	.type	camlCode__entry,@function
 	.size	camlCode__entry,.-camlCode__entry
@@ -928,85 +1024,28 @@ camlCode__data_end:
 	.long	0
 	.globl	camlCode__frametable
 camlCode__frametable:
-	.long	12
-	.long	.L126
-	.word	4
-	.word	0
-	.align	4
-	.long	.L125
-	.word	4
-	.word	1
-	.word	3
-	.align	4
-	.long	.L124
-	.word	5
-	.word	0
-	.align	4
-	.long	.L200000 - . + 0x0
-	.long	0x0
-	.long	.L122
-	.word	20
-	.word	2
-	.word	12
-	.word	5
-	.align	4
-	.long	.L119
-	.word	20
-	.word	1
-	.word	12
-	.align	4
-	.long	.L118
-	.word	20
-	.word	3
-	.word	0
-	.word	4
-	.word	8
-	.align	4
-	.long	.L114
-	.word	20
-	.word	2
-	.word	12
-	.word	5
-	.align	4
-	.long	.L111
-	.word	20
-	.word	1
-	.word	12
-	.align	4
-	.long	.L110
-	.word	20
-	.word	3
-	.word	0
-	.word	4
-	.word	8
-	.align	4
-	.long	.L107
+	.quad	4
+	.quad	.L109
 	.word	16
-	.word	2
-	.word	8
-	.word	5
-	.align	4
-	.long	.L104
-	.word	17
-	.word	1
-	.word	8
-	.align	4
-	.long	.L200001 - . + 0x9c000000
-	.long	0x39200
-	.long	.L103
-	.word	17
-	.word	2
 	.word	0
-	.word	4
-	.align	4
-	.long	.L200001 - . + 0x5c000000
-	.long	0x39140
-.L200000:
-	.ascii	"\0"
-	.align	4
-.L200001:
-	.ascii	"list.ml\0"
-	.align	4
-
+	.align	8
+	.quad	.L106
+	.word	48
+	.word	2
+	.word	24
+	.word	5
+	.align	8
+	.quad	.L103
+	.word	48
+	.word	1
+	.word	24
+	.align	8
+	.quad	.L102
+	.word	48
+	.word	3
+	.word	0
+	.word	8
+	.word	16
+	.align	8
 	.section .note.GNU-stack,"",%progbits
 *)

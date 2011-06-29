@@ -15,3 +15,8 @@
 (* Introduction of closures, uncurrying, recognition of direct calls *)
 
 val intro: int -> Lambda.lambda -> Clambda.ulambda
+
+val bind_params :
+  Ident.t list ->
+  Clambda.ulambda list -> Clambda.ulambda -> Clambda.ulambda
+
