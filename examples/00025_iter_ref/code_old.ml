@@ -17,48 +17,48 @@ let sum =
 -drawlambda
 (seq
   (letrec
-    (iter/1030
-       (function f/1031 param/1041
-         (if param/1041
-           (let (tail/1033 (field 1 param/1041) x/1032 (field 0 param/1041))
-             (seq (apply f/1031 x/1032) (apply iter/1030 f/1031 tail/1033)))
+    (iter/58
+       (function f/59 param/69
+         (if param/69
+           (let (tail/61 (field 1 param/69) x/60 (field 0 param/69))
+             (seq (apply f/59 x/60) (apply iter/58 f/59 tail/61)))
            0a)))
-    (setfield_imm 0 (global Code!) iter/1030))
-  (let (list/1034 [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]])
-    (setfield_imm 1 (global Code!) list/1034))
+    (setfield_imm 0 (global Code!) iter/58))
+  (let (list/62 [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]])
+    (setfield_imm 1 (global Code!) list/62))
   (let
-    (sum/1035
-       (let (sum/1036 (makemutable 0 0))
+    (sum/63
+       (let (sum/64 (makemutable 0 0))
          (seq
            (apply (field 0 (global Code!))
-             (function x/1037
-               (setfield_imm 0 sum/1036 (+ (field 0 sum/1036) x/1037)))
+             (function x/65
+               (setfield_imm 0 sum/64 (+ (field 0 sum/64) x/65)))
              (field 1 (global Code!)))
-           (field 0 sum/1036))))
-    (setfield_imm 2 (global Code!) sum/1035))
+           (field 0 sum/64))))
+    (setfield_imm 2 (global Code!) sum/63))
   0a)
 -dlambda
 (seq
   (letrec
-    (iter/1030
-       (function f/1031 param/1041
-         (if param/1041
-           (seq (apply f/1031 (field 0 param/1041))
-             (apply iter/1030 f/1031 (field 1 param/1041)))
+    (iter/58
+       (function f/59 param/69
+         (if param/69
+           (seq (apply f/59 (field 0 param/69))
+             (apply iter/58 f/59 (field 1 param/69)))
            0a)))
-    (setfield_imm 0 (global Code!) iter/1030))
-  (let (list/1034 [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]])
-    (setfield_imm 1 (global Code!) list/1034))
+    (setfield_imm 0 (global Code!) iter/58))
+  (let (list/62 [0: 1 [0: 2 [0: 3 [0: 4 [0: 5 0a]]]]])
+    (setfield_imm 1 (global Code!) list/62))
   (let
-    (sum/1035
-       (let (sum/1036 (makemutable 0 0))
+    (sum/63
+       (let (sum/64 (makemutable 0 0))
          (seq
            (apply (field 0 (global Code!))
-             (function x/1037
-               (setfield_imm 0 sum/1036 (+ (field 0 sum/1036) x/1037)))
+             (function x/65
+               (setfield_imm 0 sum/64 (+ (field 0 sum/64) x/65)))
              (field 1 (global Code!)))
-           (field 0 sum/1036))))
-    (setfield_imm 2 (global Code!) sum/1035))
+           (field 0 sum/64))))
+    (setfield_imm 2 (global Code!) sum/63))
   0a)
 
 -dcmm
@@ -68,7 +68,7 @@ let sum =
  "camlCode__2":
  addr "caml_curry2"
  int 5
- addr "camlCode__iter_1030")
+ addr "camlCode__iter_58")
 (data
  int 2048
  "camlCode__1":
@@ -90,34 +90,32 @@ let sum =
  L6:
  int 11
  int 1)
-(function camlCode__iter_1030 (f/1031: addr param/1041: addr)
- (if (!= param/1041 1)
-   (seq (app (load f/1031) (load param/1041) f/1031 unit)
-     (app "camlCode__iter_1030" f/1031 (load (+a param/1041 8)) addr))
+(function camlCode__iter_58 (f/59: addr param/69: addr)
+ (if (!= param/69 1)
+   (seq (app (load f/59) (load param/69) f/59 unit)
+     (app "camlCode__iter_58" f/59 (load (+a param/69 8)) addr))
    1a))
 
-(function camlCode__fun_1044 (x/1037: addr env/1046: addr)
- (store (load (+a env/1046 16))
-   (+ (+ (load (load (+a env/1046 16))) x/1037) -1))
+(function camlCode__fun_72 (x/65: addr env/74: addr)
+ (store (load (+a env/74 16)) (+ (+ (load (load (+a env/74 16))) x/65) -1))
  1a)
 
 (function camlCode__entry ()
- (let clos/1043 "camlCode__2" (store "camlCode" clos/1043))
- (let list/1034 "camlCode__1" (store (+a "camlCode" 8) list/1034))
+ (let clos/71 "camlCode__2" (store "camlCode" clos/71))
+ (let list/62 "camlCode__1" (store (+a "camlCode" 8) list/62))
  (let
-   sum/1035
-     (let sum/1036 (alloc 1024 1)
-       (app "camlCode__iter_1030"
-         (alloc 3319 "camlCode__fun_1044" 3 sum/1036)
+   sum/63
+     (let sum/64 (alloc 1024 1)
+       (app "camlCode__iter_58" (alloc 3319 "camlCode__fun_72" 3 sum/64)
          (load (+a "camlCode" 8)) unit)
-       (load sum/1036))
-   (store (+a "camlCode" 16) sum/1035))
+       (load sum/64))
+   (store (+a "camlCode" 16) sum/63))
  1a)
 
 (data)
 -dlinear
 *** Linearized code
-camlCode__iter_1030:
+camlCode__iter_58:
   f/29[%rsi] := R/0[%rax]
   if param/30[%rbx] ==s 1 goto L100
   spilled-param/36[s0] := param/30[%rbx] (spill)
@@ -130,14 +128,14 @@ camlCode__iter_1030:
   param/37[%rax] := spilled-param/36[s0] (reload)
   A/34[%rbx] := [param/37[%rax] + 8]
   f/38[%rax] := spilled-f/35[s1] (reload)
-  tailcall "camlCode__iter_1030" R/0[%rax] R/1[%rbx]
+  tailcall "camlCode__iter_58" R/0[%rax] R/1[%rbx]
   L100:
   A/31[%rax] := 1
   reload retaddr
   return R/0[%rax]
   
 *** Linearized code
-camlCode__fun_1044:
+camlCode__fun_72:
   A/31[%rdi] := [env/30[%rbx] + 16]
   A/32[%rbx] := [env/30[%rbx] + 16]
   A/33[%rbx] := [A/32[%rbx]]
@@ -161,14 +159,14 @@ camlCode__entry:
   [sum/33[%rdi]] := 1
   A/34[%rax] := sum/33[%rdi] + 16
   [A/34[%rax] + -8] := 3319
-  A/35[%rbx] := "camlCode__fun_1044"
+  A/35[%rbx] := "camlCode__fun_72"
   [A/34[%rax]] := A/35[%rbx]
   [A/34[%rax] + 8] := 3
   [A/34[%rax] + 16] := sum/33[%rdi]
   A/36[%rbx] := "camlCode"
   A/37[%rbx] := [A/36[%rbx] + 8]
   {spilled-sum/41[s0]*}
-  call "camlCode__iter_1030" R/0[%rax] R/1[%rbx]
+  call "camlCode__iter_58" R/0[%rax] R/1[%rbx]
   sum/42[%rax] := spilled-sum/41[s0] (reload)
   sum/38[%rbx] := [sum/42[%rax]]
   A/39[%rax] := "camlCode"
@@ -179,9 +177,9 @@ camlCode__entry:
   
 -S
 	.section        .rodata.cst8,"a",@progbits
-	.align	16
+	.align  16
 caml_negf_mask:	.quad   0x8000000000000000, 0
-	.align	16
+	.align  16
 caml_absf_mask:	.quad   0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF
 	.data
 	.globl	camlCode__data_begin
@@ -199,7 +197,7 @@ camlCode:
 camlCode__2:
 	.quad	caml_curry2
 	.quad	5
-	.quad	camlCode__iter_1030
+	.quad	camlCode__iter_58
 	.data
 	.quad	2048
 camlCode__1:
@@ -223,8 +221,8 @@ camlCode__1:
 	.quad	1
 	.text
 	.align	16
-	.globl	camlCode__iter_1030
-camlCode__iter_1030:
+	.globl	camlCode__iter_58
+camlCode__iter_58:
 	subq	$24, %rsp
 .L101:
 	movq	%rax, %rsi
@@ -246,12 +244,12 @@ camlCode__iter_1030:
 	movq	$1, %rax
 	addq	$24, %rsp
 	ret
-	.type	camlCode__iter_1030,@function
-	.size	camlCode__iter_1030,.-camlCode__iter_1030
+	.type	camlCode__iter_58,@function
+	.size	camlCode__iter_58,.-camlCode__iter_58
 	.text
 	.align	16
-	.globl	camlCode__fun_1044
-camlCode__fun_1044:
+	.globl	camlCode__fun_72
+camlCode__fun_72:
 .L103:
 	movq	16(%rbx), %rdi
 	movq	16(%rbx), %rbx
@@ -260,8 +258,8 @@ camlCode__fun_1044:
 	movq	%rax, (%rdi)
 	movq	$1, %rax
 	ret
-	.type	camlCode__fun_1044,@function
-	.size	camlCode__fun_1044,.-camlCode__fun_1044
+	.type	camlCode__fun_72,@function
+	.size	camlCode__fun_72,.-camlCode__fun_72
 	.text
 	.align	16
 	.globl	camlCode__entry
@@ -283,13 +281,13 @@ camlCode__entry:
 	movq	$1, (%rdi)
 	leaq	16(%rdi), %rax
 	movq	$3319, -8(%rax)
-	movq	camlCode__fun_1044@GOTPCREL(%rip), %rbx
+	movq	camlCode__fun_72@GOTPCREL(%rip), %rbx
 	movq	%rbx, (%rax)
 	movq	$3, 8(%rax)
 	movq	%rdi, 16(%rax)
 	movq	camlCode@GOTPCREL(%rip), %rbx
 	movq	8(%rbx), %rbx
-	call	camlCode__iter_1030@PLT
+	call	camlCode__iter_58@PLT
 .L106:
 	movq	0(%rsp), %rax
 	movq	(%rax), %rbx

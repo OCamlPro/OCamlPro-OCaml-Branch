@@ -59,10 +59,41 @@ let stats_elsebranch_removed = new_stats "else-branch removed"
 let stats_new_direct_call = new_stats "new direct call"
 let stats_inlined_function = new_stats "inlined function"
 
-let inline_primitive p args debug =
-  let uargs = List.map fst args in
-  let ulam = Uprim (p, uargs, debug) in
-  (ulam, Approx_unknown)
+let not_found = Not_found
+
+(* TODO: go straight to the approximation if available *)
+let rec value_of_lambda env ulam =
+  match ulam with
+      Uvar id -> if Tbl.mem id env.env_vars then Uvar id else raise not_found
+    | Uoffset (ulam, pos) -> Uoffset (value_of_lambda env ulam, pos)
+    | Uconst _ -> ulam
+    | Uprim(Pfield pos, [ulam], debug) ->
+      Uprim(Pfield pos, [value_of_lambda env ulam], debug)
+    | _ -> raise not_found
+
+let inline_primitive env p args debug =
+  try
+    match p, args with
+	Pfield pos, [_, Approx_block (n, list)] ->
+	  let approx = List.nth list pos in
+	  value_of_approximation approx, approx
+      | Pfield pos, [_, Approx_closure (closure_pos, closure, env_pos, free_variables)] ->
+	let pos = closure_pos + pos in
+	let approx = closure.(pos) in
+	let ulam = try
+	    value_of_approximation approx
+	  with Not_found ->
+	    if pos >= env_pos then
+	      let pos = pos - env_pos in
+	      value_of_lambda env free_variables.(pos)
+	    else raise not_found
+	in
+	ulam, approx
+      | _ -> raise not_found
+
+  with Not_found ->
+    let ulam = Uprim (p,  List.map fst args, debug) in
+    (ulam, Approx_unknown)
 
 let label_approx = Hashtbl.create 17
 let label_uses = Hashtbl.create 17
@@ -450,7 +481,7 @@ let rec inline env ulam =
 
     | Uprim(p, args, debug) ->
       let args = List.map (inline env) args in
-      inline_primitive p args debug
+      inline_primitive env p args debug
 
     | Udirect_apply (clos, args, debug) ->
       let args = List.map (inline env) args in
@@ -475,7 +506,7 @@ let rec inline env ulam =
       let args = List.map (inline env) args in
       begin try
 	      match funct_approx with
-		| Approx_closure (pos, clos) -> begin
+		| Approx_closure (pos, clos, _, fv) -> begin
 		  match clos.(pos) with
 		      Approx_function clos_app ->
 			Format.eprintf "Approx_closure %s (closed %b)@." clos_app.fun_desc.fun_label clos_app.fun_desc.fun_closed;
@@ -507,8 +538,12 @@ let rec inline env ulam =
 	clos, clos_pos, body
       ) defs in
       let fv_pos = !pos in
-      let closure = Array.create (!pos + List.length fv) Approx_unknown in
-      List.iteri (fun i (fv, fv_approx) ->
+      let nfv = List.length fv in
+      let closure = Array.create (!pos + nfv) Approx_unknown in
+      let (fvs,fv_approx) = List.split fv in
+      let fva = Array.of_list fvs in
+      List.iteri (fun i fv_approx ->
+(*
 	begin
 	  match fv with
 	      Uvar _
@@ -524,8 +559,8 @@ let rec inline env ulam =
 	      Printclambda.print_ulambda err_formatter fv;
 	      Format.fprintf err_formatter ">>>@.";
 	      assert false
-	end;
-	closure.(fv_pos + i) <- fv_approx) fv;
+	end; *)
+	closure.(fv_pos + i) <- fv_approx) fv_approx;
       let defs = List.map (fun (clos, clos_pos, body) ->
 	let clos_app = {
 	  fun_result = Approx_unknown;
@@ -544,16 +579,15 @@ let rec inline env ulam =
 	    (*	    Format.eprintf "In %s:\n%!" clos.fun_label;
 		    Format.eprintf "Adding closure approximation for %a\n%!" Ident.print clos_id; *)
 	    { env with env_vars = Tbl.add clos_id
-		(Approx_closure (clos_pos, closure)) env.env_vars }
+		(Approx_closure (clos_pos, closure, fv_pos, fva)) env.env_vars }
 	  else env in
 	let body, body_approx = inline env body in
 	clos_app.fun_result <- body_approx;
 	(clos, body)
       ) defs
       in
-      let (fv,_) = List.split fv in
-      let ulam = Uclosure (defs, fv) in
-      (ulam, Approx_closure (0,closure) )
+      let ulam = Uclosure (defs, fvs) in
+      (ulam, Approx_closure (0,closure, fv_pos, fva) )
 
 and direct_apply env clos_app args debug =
   incr stats_new_direct_call;

@@ -25,9 +25,9 @@ open Clambda
 type value_approximation =
   | Approx_unknown
   | Approx_function of function_approximation
-  | Approx_closure of int * value_approximation array
+  | Approx_closure of int * value_approximation array * int * ulambda array
   | Approx_shared of value_approximation * mutable_flag * structured_constant * string
-  | Approx_block of int * value_approximation list
+  | Approx_block of int * (value_approximation) list
   | Approx_constant of constant
   | Approx_pointer of int
   | Approx_immstring of string
@@ -78,7 +78,6 @@ and merge_approx_with_list approx list =
 		| _ -> Approx_unknown
 	  in
 	  merge_approx_with_list approx tail
-
 
 and merge_approx2 a1 a2 = merge_approx_with_list a1 [a2]
 

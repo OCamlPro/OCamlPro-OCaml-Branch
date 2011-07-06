@@ -39,15 +39,8 @@ let sum =
              (field 0 sum/1036))))
     (setfield_imm 2 (global Code!) sum/1035))
   0a)
-size of camlCode__iter_1030
-lambda size = 18
-camlCode__iter_1030 should be inlined
-size of camlCode__fun_1048
-lambda size = 6
-camlCode__fun_1048 should be inlined
-Second pass of inlining...
-STATS inline2:	new direct call:	1
-STATS inline2:	propagated constant:	2
+Approx_closure camlCode__fun_1048 (closed false)
+params: 2 args: 2
 -dlambda
 (seq
   (let
@@ -80,22 +73,9 @@ STATS inline2:	propagated constant:	2
              (field 0 sum/1036))))
     (setfield_imm 2 (global Code!) sum/1035))
   0a)
-size of camlCode__iter_1030
-lambda size = 18
-camlCode__iter_1030 should be inlined
-size of camlCode__fun_1048
-lambda size = 6
-camlCode__fun_1048 should be inlined
-Second pass of inlining...
-STATS inline2:	new direct call:	1
-STATS inline2:	propagated constant:	2
+Approx_closure camlCode__fun_1048 (closed false)
+params: 2 args: 2
 -dclosure
-size of camlCode__iter_1030
-lambda size = 18
-camlCode__iter_1030 should be inlined
-size of camlCode__fun_1048
-lambda size = 6
-camlCode__fun_1048 should be inlined
 *** Clambda: after closure conversion:
 (seq
   (let
@@ -147,9 +127,8 @@ camlCode__fun_1048 should be inlined
            (field 0 sum/1036))))
     (setfield_imm 2 (global camlCode!) sum/1035))
   0a)
-Second pass of inlining...
-STATS inline2:	new direct call:	1
-STATS inline2:	propagated constant:	2
+Approx_closure camlCode__fun_1048 (closed false)
+params: 2 args: 2
 *** Clambda: after second inlining:
 (seq
   (let
@@ -194,8 +173,8 @@ STATS inline2:	propagated constant:	2
                          (if param/1054
                            (seq
                              (let (x/1055 {} =  (field 0 param/1054))
-                               (setfield_imm 0 (field 2 f/1052)
-                                 (+ (field 0 (field 2 f/1052)) x/1055)))
+                               (setfield_imm 0 sum/1036
+                                 (+ (field 0 sum/1036) x/1055)))
                              (exit 6 (field 1 param/1054)))
                            0a)))
                     with (6 param/1043)
@@ -249,8 +228,8 @@ STATS inline2:	propagated constant:	2
                          (if param/1054
                            (seq
                              (let (x/1055 {} =  (field 0 param/1054))
-                               (setfield_imm 0 (field 2 f/1052)
-                                 (+ (field 0 (field 2 f/1052)) x/1055)))
+                               (setfield_imm 0 sum/1036
+                                 (+ (field 0 sum/1036) x/1055)))
                              (exit 6 (field 1 param/1054)))
                            0a)))
                     with (6 param/1043)
@@ -262,15 +241,8 @@ STATS inline2:	propagated constant:	2
 
 
 -dcmm
-size of camlCode__iter_1030
-lambda size = 18
-camlCode__iter_1030 should be inlined
-size of camlCode__fun_1048
-lambda size = 6
-camlCode__fun_1048 should be inlined
-Second pass of inlining...
-STATS inline2:	new direct call:	1
-STATS inline2:	propagated constant:	2
+Approx_closure camlCode__fun_1048 (closed false)
+params: 2 args: 2
 (data int 3072 global "camlCode" "camlCode": skip 24)
 (data
  int 3319
@@ -338,8 +310,7 @@ STATS inline2:	propagated constant:	2
                      (if (!= param/1054 1)
                        (seq
                          (let x/1055 (load param/1054)
-                           (store (load (+a f/1052 16))
-                             (+ (+ (load (load (+a f/1052 16))) x/1055) -1)))
+                           (store sum/1036 (+ (+ (load sum/1036) x/1055) -1)))
                          (exit 6 (load (+a param/1054 8))))
                        1a)))
                with(6 param/1043) (assign param/1053 param/1043))))
@@ -350,15 +321,8 @@ STATS inline2:	propagated constant:	2
 
 (data)
 -dlinear
-size of camlCode__iter_1030
-lambda size = 18
-camlCode__iter_1030 should be inlined
-size of camlCode__fun_1048
-lambda size = 6
-camlCode__fun_1048 should be inlined
-Second pass of inlining...
-STATS inline2:	new direct call:	1
-STATS inline2:	propagated constant:	2
+Approx_closure camlCode__fun_1048 (closed false)
+params: 2 args: 2
 *** Linearized code
 camlCode__iter_1030:
   spilled-f/42[s0] := f/29[%rax] (spill)
@@ -404,29 +368,27 @@ camlCode__entry:
   [sum/33[%rax]] := 1
   A/34[%rbx] := "camlCode"
   param/35[%rbx] := [A/34[%rbx] + 8]
-  f/36[%rcx] := sum/33[%rax] + 16
-  [f/36[%rcx] + -8] := 3319
+  f/36[%rsi] := sum/33[%rax] + 16
+  [f/36[%rsi] + -8] := 3319
   A/37[%rdi] := "camlCode__fun_1048"
-  [f/36[%rcx]] := A/37[%rdi]
-  [f/36[%rcx] + 8] := 3
-  [f/36[%rcx] + 16] := sum/33[%rax]
+  [f/36[%rsi]] := A/37[%rdi]
+  [f/36[%rsi] + 8] := 3
+  [f/36[%rsi] + 16] := sum/33[%rax]
   L107:
   if param/41[%rbx] ==s 1 goto L108
-  x/42[%rdx] := [param/41[%rbx]]
-  A/43[%rsi] := [f/36[%rcx] + 16]
-  A/44[%rdi] := [f/36[%rcx] + 16]
-  A/45[%rdi] := [A/44[%rdi]]
-  I/46[%rdi] := A/45[%rdi] + x/42[%rdx] + -1
-  [A/43[%rsi]] := I/46[%rdi]
-  A/47[%rbx] := [param/41[%rbx] + 8]
+  x/42[%rsi] := [param/41[%rbx]]
+  A/43[%rdi] := [sum/33[%rax]]
+  I/44[%rdi] := A/43[%rdi] + x/42[%rsi] + -1
+  [sum/33[%rax]] := I/44[%rdi]
+  A/45[%rbx] := [param/41[%rbx] + 8]
   goto L107
   L108:
-  A/48[%rbx] := 1
+  A/46[%rbx] := 1
   L106:
-  sum/49[%rbx] := [sum/33[%rax]]
-  A/50[%rax] := "camlCode"
-  [A/50[%rax] + 16] := sum/49[%rbx]
-  A/51[%rax] := 1
+  sum/47[%rbx] := [sum/33[%rax]]
+  A/48[%rax] := "camlCode"
+  [A/48[%rax] + 16] := sum/47[%rbx]
+  A/49[%rax] := 1
   reload retaddr
   return R/0[%rax]
   
@@ -942,9 +904,9 @@ caml_globals:
 	.globl	caml_globals_map
 	.quad	21756
 caml_globals_map:
-	.ascii	"\204\225\246\276\0\0\0\222\0\0\0\22\0\0\0P\0\0\0A\240\300*Pervasives0\333r:\27\230\261\42\340\211\31\242\277\355\6%\24\60+h\272\320\331*\363\303]\334'\344I\276\362\223\240\4\4@\240\300$Code0\20"
-	.ascii	"\243\364\221d\277\214E[\256\240\205\25\31\256\223\60\234\11\306X\360\366\337\23\206q\201 \15$\2E\240\4\4@\240\300(Std_exit0K<u\217\27kw\366\203\3\37W\376u\277\312\60O\31\364*\11\203\263\235i\277\261\26\373?\370"
-	.ascii	"\276\240\4\4@@"
+	.ascii	"\204\225\246\276\0\0\0\222\0\0\0\22\0\0\0P\0\0\0A\240\300*Pervasives0\333r:\27\230\261\42\340\211\31\242\277\355\6%\24\60\204\71\251t<\345\33MN\266\206u\1\65\216t\240\4\4@\240\300$Code0\20"
+	.ascii	"\243\364\221d\277\214E[\256\240\205\25\31\256\223\60\234\11\306X\360\366\337\23\206q\201 \15$\2E\240\4\4@\240\300(Std_exit0K<u\217\27kw\366\203\3\37W\376u\277\312\60\366Q}S[\307\65\370C]\227\0\370\324#"
+	.ascii	"'\240\4\4@@"
 	.space	1
 	.byte	1
 	.data
@@ -1162,21 +1124,19 @@ camlCode__entry:
 	movq	$1, (%rax)
 	movq	camlCode@GOTPCREL(%rip), %rbx
 	movq	8(%rbx), %rbx
-	leaq	16(%rax), %rcx
-	movq	$3319, -8(%rcx)
+	leaq	16(%rax), %rsi
+	movq	$3319, -8(%rsi)
 	movq	camlCode__fun_1048@GOTPCREL(%rip), %rdi
-	movq	%rdi, (%rcx)
-	movq	$3, 8(%rcx)
-	movq	%rax, 16(%rcx)
+	movq	%rdi, (%rsi)
+	movq	$3, 8(%rsi)
+	movq	%rax, 16(%rsi)
 .L107:
 	cmpq	$1, %rbx
 	je	.L108
-	movq	(%rbx), %rdx
-	movq	16(%rcx), %rsi
-	movq	16(%rcx), %rdi
-	movq	(%rdi), %rdi
-	leaq	-1(%rdi, %rdx), %rdi
-	movq	%rdi, (%rsi)
+	movq	(%rbx), %rsi
+	movq	(%rax), %rdi
+	leaq	-1(%rdi, %rsi), %rdi
+	movq	%rdi, (%rax)
 	movq	8(%rbx), %rbx
 	jmp	.L107
 .L108:

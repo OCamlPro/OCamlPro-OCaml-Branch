@@ -19,7 +19,7 @@
 type value_approximation =
     Approx_unknown
   | Approx_function of function_approximation
-  | Approx_closure of int * value_approximation array
+  | Approx_closure of int * value_approximation array * int * Clambda.ulambda array
   | Approx_shared of value_approximation * Asttypes.mutable_flag *
       Lambda.structured_constant * string
   | Approx_block of int * value_approximation list

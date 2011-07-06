@@ -336,3 +336,9 @@ asmrun/debugger.c
 debugger/dynlink.ml
 debugger/dynlink.mli
 ocamlbuild-mixed-boot
+typing/*.s
+utils/*.s
+parsing/*.s
+bytecomp/*.s
+asmcomp/*.s
+driver/*.s
