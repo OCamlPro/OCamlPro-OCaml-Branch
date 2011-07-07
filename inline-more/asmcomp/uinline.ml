@@ -58,9 +58,15 @@ let stats_while_removed = new_stats "while removed"
 let stats_elsebranch_removed = new_stats "else-branch removed"
 let stats_new_direct_call = new_stats "new direct call"
 let stats_inlined_function = new_stats "inlined function"
+let stats_oneuse_function = new_stats "one-use function"
+let stats_removed_closures = new_stats "removed closures"
 
 let not_found = Not_found
 
+(* Check whether an expression can be evaluated in the current context
+   (i.e. if the variables are bounded in the current function). If
+   true, returns the expression. Otherwise, raise Not_found.
+*)
 (* TODO: go straight to the approximation if available *)
 let rec value_of_lambda env ulam =
   match ulam with
@@ -95,10 +101,42 @@ let inline_primitive env p args debug =
     let ulam = Uprim (p,  List.map fst args, debug) in
     (ulam, Approx_unknown)
 
+
 let label_approx = Hashtbl.create 17
+
+(* Note: this is not the real number of uses, but the uses where the variable
+actually escapes, i.e. a field access in the value is not considered. *)
 let label_uses = Hashtbl.create 17
 let var_uses = Hashtbl.create 17
 
+let add_label_uses score fundesc =
+  let label = fundesc.fun_label in
+  let r =
+    try Hashtbl.find label_uses label with Not_found ->
+    let r = ref 0 in Hashtbl.add label_uses label r; r
+  in
+  r := !r + score
+
+let get_var_uses var =
+  try ! (Hashtbl.find var_uses var) with Not_found -> 0
+
+let get_label_uses var =
+  try ! (Hashtbl.find label_uses var) with Not_found -> 0
+
+(* We want to count the number of times a function is called, and its closure
+used:
+- if the function is closed, the number of direct calls is one, and the closure
+  is never used, then the function should always be inlined. (DONE)
+- if the function is not closed, the number of direct calls is one, and the closure
+  is used only once, and the closure extra-parameter does not escape, then the function
+  should always be inlined. (DONE)
+- if the function is closed, and the closure is never used, then there is no need
+  to allocate the closure -> static closures, not dynamically allocated. (NOT NEEDED)
+- if the function is not closed, and the closure is only used as the extra parameter
+  of direct calls, and the corresponding parameter inside the function does not
+  escape, then, the closure itself can be replaced by a tuple containing the
+  variables. (TODO)
+*)
 let count_uses ulam =
   Hashtbl.clear label_uses;
   Hashtbl.clear var_uses;
@@ -108,21 +146,77 @@ let count_uses ulam =
 	  Uvar id ->
 	    begin try incr (Hashtbl.find var_uses id) with Not_found ->
 	      let r = ref 1 in Hashtbl.add var_uses id r; end
-	| Udirect_apply (fundesc, _, _) ->
-	  let label = fundesc.fun_label in
-	    begin try incr (Hashtbl.find label_uses label) with Not_found ->
-	      let r = ref 1 in Hashtbl.add label_uses label r; end
+	| Udirect_apply (fundesc, _, _) -> add_label_uses 1 fundesc
+	| Uprim(Pfield _, [Uvar _], _) -> ()
 	| _ -> ()
     end;
     Usimplif.clambda_iter counter ulam;
     (* We want to detect the case where a function is only used once, in
-       which case it is natural to inline it whatever its size is.
+       which case it is natural to inline it whatever its size is. *)
     begin
       match ulam with
-	| Ulet(Strict, var, Uclosure ([fundesc], _), body) ->
-	  let var_uses =
+	| Ulet(Strict, var, Uclosure (fundescs, _), body) ->
+	  let var_uses = get_var_uses var in
+	  begin
+	    match fundescs with
+		[] -> assert false
+	      | [ fundesc, fun_body ] -> begin
+		match fundesc.fun_inline with
+		    Some _ -> ()
+		  | None ->
+		    let label_uses = get_label_uses fundesc.fun_label in
+		    if fundesc.fun_closed then begin
+		      if label_uses = 1 && var_uses = 0 then begin
+		    (* This function is used only once, inline it ! *)
+			incr stats_oneuse_function;
+			fundesc.fun_inline <- Some (fundesc.fun_params, fun_body)
+		      end
+		    end else begin
+		      let closure_param = List2.last fundesc.fun_params in
+		      let closure_param_uses = get_var_uses closure_param in
+		      if label_uses = 1 && var_uses = 1 && closure_param_uses = 0 then begin
+		    (* This function is used only once, inline it ! *)
+			incr stats_oneuse_function;
+			fundesc.fun_inline <- Some (fundesc.fun_params, fun_body)
+		      end
+		    end
+	      end
+	      | _ -> ()
+	  end
+	| _ -> ()
     end
-    *)
+  in
+  counter ulam
+
+(* TODO: replace this pass by arity-raising, closure-to-tuple
+   transform and closure-removal *)
+let count_uses_and_clean ulam =
+  Hashtbl.clear label_uses;
+  Hashtbl.clear var_uses;
+  let rec counter ulam =
+    begin
+      match ulam with
+	  Uvar id ->
+	    begin try incr (Hashtbl.find var_uses id) with Not_found ->
+	      let r = ref 1 in Hashtbl.add var_uses id r; end
+	| Udirect_apply (fundesc, _, _) -> add_label_uses 1 fundesc
+	| _ -> ()
+    end;
+    let ulam = Usimplif.clambda_map counter ulam in
+    (* We want to detect the case where a function is only used once, in
+       which case it is natural to inline it whatever its size is. *)
+    begin
+      match ulam with
+	| Ulet(Strict, var, Uclosure ([fundesc, _],_), body) ->
+	  let var_uses = get_var_uses var in
+	  let label_uses = get_label_uses fundesc.fun_label in
+	  if var_uses = 0 && label_uses = 0 then begin
+	    incr stats_removed_closures;
+	    body
+	  end else
+	    ulam
+	| _ -> ulam
+    end
   in
   counter ulam
 
@@ -509,7 +603,7 @@ let rec inline env ulam =
 		| Approx_closure (pos, clos, _, fv) -> begin
 		  match clos.(pos) with
 		      Approx_function clos_app ->
-			Format.eprintf "Approx_closure %s (closed %b)@." clos_app.fun_desc.fun_label clos_app.fun_desc.fun_closed;
+(*			Format.eprintf "Approx_closure %s (closed %b)@." clos_app.fun_desc.fun_label clos_app.fun_desc.fun_closed; *)
 
 			let fundesc = clos_app.fun_desc in
 			let nargs = List.length args in
@@ -599,7 +693,7 @@ and direct_apply env clos_app args debug =
 	(ulam, clos_app.fun_result)
     | Some (_params, body) -> (* we don't need to use params here ? *)
       incr stats_inlined_function;
-      Format.eprintf "params: %d args: %d@." (List.length fundesc.fun_params) (List.length args);
+(*      Format.eprintf "params: %d args: %d@." (List.length fundesc.fun_params) (List.length args); *)
       let ulam = Closure.bind_params fundesc.fun_params args body in
       (* beware: fortunately, recursive functions cannot be inlined
 	 (fun_inline = None), so, for now, there is no risk of an infinite
@@ -626,13 +720,21 @@ let optimize ppf ulam =
 
     let (ulam,_) = inline (empty_env()) ulam in
 
-    if !debug_inline2 then
-      List.iter (print_stats ppf "inline2") !stats;
-
     if !Clflags.dump_closure || !dump_inline2 then begin
       Format.fprintf ppf "*** Clambda: after second inlining:@;%a@."
 	Printclambda.print_ulambda ulam;
     end;
+
+    let ulam = count_uses_and_clean ulam in
+
+    if !Clflags.dump_closure || !dump_inline2 && !stats_removed_closures > 0 then begin
+      Format.fprintf ppf "*** Clambda: after closure removal:@;%a@."
+	Printclambda.print_ulambda ulam;
+    end;
+
+    if !debug_inline2 then
+      List.iter (print_stats ppf "inline2") !stats;
+
 
     ulam
   end else begin
